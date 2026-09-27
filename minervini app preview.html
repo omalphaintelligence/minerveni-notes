@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Minervini Notes</title>
+<meta name="theme-color" content="#1B2A35">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Minervini">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#EDF1EF; --grid:#D6E0DB; --ink:#1B2A35; --soft:#5A6B75;
+  --up:#1E7A4C; --red:#B3322B; --card:#FFFFFF; --line:#C9D4CF;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  font-family:Archivo,system-ui,sans-serif; color:var(--ink);
+  background-color:var(--paper);
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:22px 22px;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:760px;margin:0 auto;padding:28px 16px 80px}
+header h1{font-weight:800;font-size:clamp(28px,7vw,44px);line-height:1.02;letter-spacing:-.02em;margin:0 0 6px}
+header p{margin:0;color:var(--soft);font-size:15px}
+/* signature: a mini price line that traces progress */
+.trend{margin:18px 0 6px;background:var(--card);border:1px solid var(--line);padding:12px 14px 10px}
+.trend svg{display:block;width:100%;height:56px}
+.trend .meta{display:flex;justify-content:space-between;font-size:13px;color:var(--soft);margin-top:4px}
+.trend .meta b{color:var(--up)}
+.controls{position:sticky;top:0;z-index:5;background:var(--paper);padding:12px 0 10px;border-bottom:1px solid var(--line);margin-bottom:14px}
+.row{display:flex;gap:8px;align-items:center}
+input[type=search]{flex:1;font:inherit;font-size:16px;padding:10px 12px;border:1.5px solid var(--ink);background:var(--card);color:var(--ink);border-radius:2px}
+button{font:inherit;cursor:pointer}
+.btn{font-size:14px;font-weight:600;padding:10px 12px;border:1.5px solid var(--ink);background:var(--ink);color:#fff;border-radius:2px;white-space:nowrap}
+.btn.ghost{background:var(--card);color:var(--ink)}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-top:10px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;font-size:13px;padding:6px 10px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:20px}
+.chip[aria-pressed=true]{background:var(--up);border-color:var(--up);color:#fff}
+.filters{display:flex;gap:14px;font-size:13px;color:var(--soft);padding-top:8px}
+.filters label{display:flex;gap:5px;align-items:center;cursor:pointer}
+h2{font-size:15px;font-weight:800;margin:26px 0 8px;display:flex;align-items:baseline;gap:8px}
+h2 span{font-weight:400;color:var(--soft);font-size:13px}
+.qa{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--line);margin-bottom:6px}
+.qa.done{border-left-color:var(--up)}
+.qa.star{border-left-color:var(--red)}
+.qhead{display:flex;gap:10px;align-items:flex-start;width:100%;text-align:left;background:none;border:0;padding:12px 12px;color:var(--ink)}
+.qid{flex:none;font-size:11px;font-weight:600;color:var(--soft);padding-top:3px;min-width:40px}
+.qtext{flex:1;font-weight:600;font-size:15.5px;line-height:1.35}
+.caret{flex:none;transition:transform .2s;color:var(--soft);padding-top:2px}
+.qa.open .caret{transform:rotate(90deg)}
+.ans{display:none;padding:0 14px 12px 62px}
+.qa.open .ans{display:block}
+.ans p{font-family:"Source Serif 4",Georgia,serif;font-size:16.5px;line-height:1.6;margin:0 0 10px;max-width:62ch}
+.acts{display:flex;gap:8px}
+.mini{font-size:12.5px;padding:5px 9px;border:1px solid var(--line);background:var(--paper);color:var(--ink);border-radius:2px}
+.mini[aria-pressed=true].m-done{background:var(--up);color:#fff;border-color:var(--up)}
+.mini[aria-pressed=true].m-star{background:var(--red);color:#fff;border-color:var(--red)}
+mark{background:#FFE58A;color:inherit;padding:0 1px}
+.empty{padding:30px 0;color:var(--soft);text-align:center}
+/* flashcard */
+.fc{position:fixed;inset:0;background:rgba(27,42,53,.55);display:none;align-items:center;justify-content:center;padding:16px;z-index:20}
+.fc.on{display:flex}
+.card{background:var(--card);max-width:560px;width:100%;border:1.5px solid var(--ink);padding:20px 18px 16px;max-height:90vh;overflow:auto}
+.card .cid{font-size:12px;color:var(--soft);margin-bottom:6px}
+.card .cq{font-size:20px;font-weight:800;line-height:1.25;margin-bottom:14px}
+.card .ca{font-family:"Source Serif 4",Georgia,serif;font-size:17px;line-height:1.6;display:none;border-top:1px dashed var(--line);padding-top:12px}
+.card.rev .ca{display:block}
+.card .row{margin-top:16px;flex-wrap:wrap}
+:focus-visible{outline:2px solid var(--up);outline-offset:2px}
+.wrap{padding-top:calc(28px + env(safe-area-inset-top));padding-bottom:calc(96px + env(safe-area-inset-bottom))}
+.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:15;display:flex;background:var(--ink);padding-bottom:env(safe-area-inset-bottom)}
+.tabbar button{flex:1;background:none;border:0;color:#9FB3BF;font-size:12.5px;font-weight:600;padding:10px 0 12px;display:flex;flex-direction:column;align-items:center;gap:3px}
+.tabbar button svg{width:22px;height:22px}
+.tabbar button[aria-current=true]{color:#fff}
+.install{display:none;margin-top:12px}
+.install.show{display:inline-block}
+body{overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent}
+.fc{padding-bottom:calc(16px + env(safe-area-inset-bottom))}
+@media (max-width:520px){.ans{padding-left:14px}.qid{min-width:36px}}
+@media (prefers-reduced-motion:reduce){.caret{transition:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Minervini ke 129 jawab</h1>
+    <p>Momentum Masters se, apne shabdon mein. Padho, yaad hone pe tick karo, zaroori ko star karo.</p>
+    <button class="btn install" id="installBtn">App install karo</button>
+  </header>
+
+  <div class="trend" aria-label="Progress">
+    <svg id="spark" viewBox="0 0 300 56" preserveAspectRatio="none" aria-hidden="true"></svg>
+    <div class="meta"><span>Section-wise progress</span><span><b id="doneN">0</b> / 129 yaad</span></div>
+  </div>
+
+  <div class="controls">
+    <div class="row">
+      <input type="search" id="q" placeholder="Search: stop, VCP, volume, earnings…" aria-label="Search">
+      
+    </div>
+    <div class="chips" id="chips"></div>
+    <div class="filters">
+      <label><input type="checkbox" id="fStar"> Sirf starred</label>
+      <label><input type="checkbox" id="fTodo"> Sirf baaki</label>
+      <button class="mini" id="expand">Sab kholo</button>
+    </div>
+  </div>
+
+  <main id="list"></main>
+</div>
+
+<nav class="tabbar" aria-label="App">
+  <button id="tNotes" aria-current="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16M4 12h16M4 19h10"/></svg>Notes</button>
+  <button id="tCards"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="6" width="16" height="12" rx="1"/><path d="M8 3h12v12"/></svg>Flashcards</button>
+  <button id="tStar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg>Starred</button>
+</nav>
+
+<div class="fc" id="fc" role="dialog" aria-modal="true" aria-label="Flashcard">
+  <div class="card" id="card">
+    <div class="cid" id="cid"></div>
+    <div class="cq" id="cq"></div>
+    <div class="ca" id="ca"></div>
+    <div class="row">
+      <button class="btn" id="reveal">Jawab dikhao</button>
+      <button class="btn ghost" id="know">Yaad hai ✓</button>
+      <button class="btn ghost" id="next">Agla</button>
+      <button class="btn ghost" id="close">Band karo</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const DATA = [{"n": 1, "name": "Introduction", "items": [{"id": "S1-1", "q": "Kya style time ke saath badla?", "a": "Lagbhag 95% same hai — supply/demand kabhi purana nahi hota. Bas pullback setups zyada trade karne laga kyunki usme naye techniques develop kiye. 30+ saal se approach wahi."}, {"id": "S1-2", "q": "Daily routine?", "a": "Zyada kaam raat ko pehle hi. Subah 8:30 ET screen pe: earnings/news, premarket futures, holdings review, stops update, buy price aur stop ke paas audio alerts. Sab kuch market hours ke bahar plan — emotion hatane ke liye. Pehle charts haath se graph paper pe banata tha."}, {"id": "S1-3", "q": "HFT ke baare mein?", "a": "Isko allow karna bekaar hai; market fair hona chahiye. HFT ek loophole hai jo front-running allow karta hai."}, {"id": "S1-4", "q": "Trading mein kaise aaye, motivation?", "a": "Garibi mein bada hua, ameer banna tha. Market ko bina bhedbhav wala mauka dekha. Baad mein paisa sirf score rakhne ka tareeka ban gaya, asli maza challenge mein. Ab dusron ko sikhana aur unki success sunna motivate karta hai."}, {"id": "S1-5", "q": "Shuru mein success mili?", "a": "Nahi — lagbhag 6 saal kharab results. Consistency tab aayi jab ego chhoda: goal paisa banana hai, sahi hona nahi. Galti maano, loss kaato, profit bachao."}, {"id": "S1-6", "q": "Kya game rigged hai?", "a": "Bilkul nahi. Chhote trader ko liquidity aur speed ka fayda hai — institution cruise ship chala raha hai, tum speedboat. Rigged wahi bolte hain jo market beat nahi kar paaye. Ya paisa banao ya bahane — dono saath nahi."}, {"id": "S1-7", "q": "Full-time job ke saath EOD data se trading possible?", "a": "Haan, par tracking aur orders mushkil — mechanical stops pe depend karna padega. Aaj ke platforms kaafi powerful hain."}, {"id": "S1-8", "q": "Screen pe nahi ho to entry/exit kaise?", "a": "Broker ke paas stops aur bracket orders lagao; platforms pe kaafi algos available hain."}, {"id": "S1-9", "q": "Margin/options use karte ho?", "a": "Ab nahi. Shuru mein margin aur options use kiye, par options mein bahut kuch tumhare against kaam karta hai."}, {"id": "S1-10", "q": "Talent paidaishi ya seekha ja sakta hai? Learning curve?", "a": "Sports jaisa — genetic advantage kuch hota hai par result decide nahi karta. Internet se seekhna fast hua hai agar kachra filter kar sako. Experience ka substitute nahi. Learning curve kam se kam kuch saal, 5 saal tak."}, {"id": "S1-11", "q": "Chhote account se ameer ban sakte ho?", "a": "Bilkul. Commissions kam, information sabke paas — trading ke liye bahut achha time hai."}]}, {"n": 2, "name": "Stock Selection", "items": [{"id": "S2-1", "q": "Big-potential momentum stocks kaise dhoondhein?", "a": "Strong relative strength, high alpha, low standard deviation zaroori. Robert Levy ki \"The Relative Strength Concept\" padhi thi. RS screening free/paid tools se karo."}, {"id": "S2-2", "q": "Minimum volume?", "a": "Kaafi kam — 1–3 lakh shares/day, kabhi 50,000 bhi. Thinly traded stocks se darna nahi, balki unhe apnao — bade winners aksar chhoti unknown companies. Bas position utni rakho jitni safely nikal sako. Chhote stock mein chhoti position jo bhaage, bade liquid stock mein badi position jo na hile usse behtar. Zyada paisa chhote names mein banaya."}, {"id": "S2-3", "q": "Dark pools se volume analysis badla?", "a": "Nahi. Intraday thoda skew ho sakta hai, par EOD total mein sab aa jaata hai — wahi number main dekhta hoon."}, {"id": "S2-4", "q": "Bottom-fishing karte ho?", "a": "Girte stock ka bottom pakadna — kabhi nahi. Strong uptrend mein normal pullback ke baad pivot ke upar jaate hue buy kar sakta hoon. Girti chhuri pakadna = loss."}, {"id": "S2-5", "q": "Low-priced stocks?", "a": "Ye myth hai ki $1 ka $2 hona aasaan. Uska zero hona zyada likely. History mein bade winners aam taur pe $30 ke upar se chale. Kam shares rakhna behtar (liquidity). Usual cutoff $12; 80% trades $20–30+ wale stocks mein (institutions aate hain). 2008 ke baad sasta stock zyada trade kiya. Sasta stock liya to lowest-risk entry pe, kyunki volatile hote hain."}, {"id": "S2-6", "q": "Top-down ya bottom-up?", "a": "Pehle top-down tha — par jab tak group hot hota, best stocks nikal chuke hote. Process ulta kiya (bottom-up), performance bahut sudhri. Leaders pehle chalte hain; kuch bear market mein bhi zyada nahi girte (1990 mein Amgen, U.S. Surgical 50-DMA ke thoda hi neeche gaye, baad mein huge winners)."}, {"id": "S2-7", "q": "Leading industry groups kaise pakdein?", "a": "Best stocks khud best group tak le jaate hain. Focus individual stock pe. Group ke leaders jaldi pehchano — market/group weak hote hue bhi jo strong dikhe. Jaise index 200 aur 50-DMA ke neeche ho aur koi stock dono ke upar — market palte to ye next leader ho sakta hai."}, {"id": "S2-8", "q": "IPO trade karte ho?", "a": "Pehle 3–4 hafte ka trading history chahiye. Time frame compressed hota hai; price-volume action dekho. Same technical/fundamental qualities chahiye. Sound base bane to consolidation se nikalte hue buy, preferably all-time high ke paas."}, {"id": "S2-9", "q": "Large cap vs small cap?", "a": "Large cap zyada followed = crowded trade, price action random. Inme lows undercut/shakeout hone dete hain, correction range mein pehle entry. Best time: bear market/deep correction se nikalte waqt. Small caps new highs ke paas trade — kam efficient pricing, crowd ko beat karne ki zaroorat nahi."}, {"id": "S2-10", "q": "Shorting karte ho?", "a": "Long aur short saath mein rarely. Usually long ya cash. Bear market mein ya jab leaders top banake toot rahe ho tab short. Bade break ke baad low-volume rally short karta hoon — par entry tab jab dobara girna shuru ho aur downside volume badhe."}, {"id": "S2-11", "q": "Favorite stock ka wait karte ho?", "a": "Favorites nahi rakhta. Apni opinion pe bharosa nahi — kabhi na kabhi galat hogi. Strong conviction se market ki baat sunna mushkil. Favorite ke chakkar mein asli leader miss ho sakta hai. Market sahi, opinions aksar galat."}]}, {"n": 3, "name": "Position Sizing", "items": [{"id": "S3-1", "q": "Kitne stocks — concentrate ya diversify?", "a": "Har jagah diversify karke huge returns nahi milte. Edge hai to diversification protect nahi, dilute karta hai. Best positions 25% tak. 2:1 trader ke liye optimal size ~25% (Optimal f / Kelly formula dekho). Concentration ke saath galat hote hi turant bahar nikalna zaroori."}, {"id": "S3-2", "q": "Per trade total equity ka kitna risk?", "a": "Aam taur pe 1.25%–2.50%. Example: 25% position, 5% stop = 1.25% equity risk."}, {"id": "S3-3", "q": "Fully invested kitni positions mein?", "a": "Rarely 10–12 se zyada; ideally paisa 4–8 best names mein."}, {"id": "S3-4", "q": "Maximum position? Poora account ek stock mein?", "a": "Max 25%. Naye/conservative ho to 10–12% positions (8–10 stocks). 25 names ki zaroorat nahi. Ek stock mein sab kabhi nahi — 1990s mein ek stock lene wala tha jo agle din 80% gap down hua. 25% mein bade gains bhi aur disaster bhi recoverable."}, {"id": "S3-5", "q": "Minimum position size?", "a": "Stops baar-baar hit ho rahe ho to size ghataata jaata hoon — tab koi minimum nahi. Normally shuru kam se kam 5%."}, {"id": "S3-6", "q": "Dollar risk ya fixed percentage se sizing?", "a": "Kabhi fixed rupees/dollar risk decide karke backwards size nikalta hoon, par zyadatar percentage. Test (\"toe in water\") trades 5–10%; jab sab chal raha ho tab best names mein 25%."}, {"id": "S3-7", "q": "Account badhne pe size badhana?", "a": "Main poora account use karta hoon. Naye trader ko account 25–50% up hone tak ruk ke size badhana chahiye."}, {"id": "S3-8", "q": "Badi position lene ka confidence kahan se?", "a": "Risk jitna kam, position utni badi. Risk = stop ka size + liquidity. Trade ko poker hand ki tarah grade karo — aces/kings full, chhote pair ko partial. Pichhle winning trades ka cushion ho tabhi bada risk (gains ke upar pyramid)."}, {"id": "S3-9", "q": "Setup quality kaise judge, sizes equal?", "a": "Equal rakhne ki koshish, par liquidity/volatility aur apna trading rhythm farq daalte hain — haal mein wins nahi to chhota trade. Quality = price-volume action + earnings power; best names mein strongest price performance aur strongest earnings/sales."}]}, {"n": 4, "name": "Technical Analysis", "items": [{"id": "S4-1", "q": "Buy karne se pehle price/volume mein kya dekhte ho?", "a": "Price mein volatility contraction + volume dry-up (selling vacuum). Strong trend wale stock mein VCP batata hai ki line of least resistance ban gayi hai aur pivot se blast ho sakta hai. Detail: \"Trade Like a Stock Market Wizard\" ka chapter \"A Picture Is Worth a Million Dollars\"."}, {"id": "S4-2", "q": "Kharab fundamentals par strong technicals + bullish market?", "a": "Best trades mein fundamentals, technicals, market teeno favor mein. Par \"unexplained strength\" wale stocks achhe risk-reward hote hain kyunki crowded nahi. Haan, chart bahut strong ho to lunga — aksar high-momentum situation, jaise biotech/medical (FDA approval, naya drug)."}, {"id": "S4-3", "q": "Poor fundamentals + high RS + 52-week high = leader?", "a": "Price leader hai, to definition se market leader. Textbook definition = market aur group peers ke mukable price action. Sab kuch ho to best. History: ~70% bade movers ke paas move se pehle earnings hote hain; biotech mein aksar nahi."}, {"id": "S4-4", "q": "Uptrend ki definition?", "a": "Party mein pehle pahunchna bekaar — pehle interest (institutions) dikhe. Girte 200-DMA ke neeche wala stock kabhi long nahi (agar 200 din ka data ho), fundamentals kitne bhi achhe ho. Long-term downtrend wale stocks se bada winner milne ke chances bahut kam."}, {"id": "S4-5", "q": "Stochastics/MACD/ATR?", "a": "Koi nahi. Sirf price, volume, kuch moving averages (smoothing) aur fundamentals — earnings, sales, margins. Par jo tumhare liye kaam kare, wahi use karo."}, {"id": "S4-6", "q": "Sabse important technical factors?", "a": "Price-volume action + RS (market aur group ke against). Market ka verdict hi final. Fundamentals strong hon par price-volume constructive nahi to buy nahi."}, {"id": "S4-7", "q": "Pullback pe ya breakout pe buy?", "a": "Zyadatar pullback buys base ke andar hi, breakout se pehle. Kabhi pichhle breakout level pe pullback, kabhi-kabhi 50-DMA pe (par ummeed ki pehle hi andar ho). Jo low-risk setup kaam kare — cycle ka technical \"theme\" pakdo. Kisi mein bhi zyada risk mat lo."}, {"id": "S4-8", "q": "Breakout ki definition?", "a": "Pre-decided price level ke upar trade karna, aam taur pe base se nikalte hue. Pichhle din ka high buy point ho to uske upar jaana breakout. Depends kaunsi strategy aur kaunsi line important maante ho."}, {"id": "S4-9", "q": "False breakouts — pivot se 10–20 cents upar buy?", "a": "Main ek paisa upar nahi, 5/10/20 cents upar ka wait karta hoon. Sirf jab trades chal rahe ho tab aggressive. Thoda mehenga lena theek taaki move confirm ho — phir bhi palat sakta hai, koi magic number nahi. Stock waapas base mein aaye aur stop na lage to aam taur pe rehta hoon. Ek price pe sab mat khareedo — scale in karo."}, {"id": "S4-10", "q": "Low-volume consolidation mein position banana?", "a": "Aam taur pe breakout ya kam se kam pivot se upar turn hone ka wait. Dead money nahi chahiye; stock trade ki direction mein chal raha ho. Kuch paise pehle ghusne ka koi fayda nahi."}, {"id": "S4-11", "q": "Kam volume pe new highs?", "a": "Demand kamzor. Par sirf isliye sell nahi — kam volume pe bhi stocks kaafi door ja sakte hain."}, {"id": "S4-12", "q": "Breakout average/kam volume pe?", "a": "Zaroori nahi ki warning ho. Volume agle din/kuch din baad aa sakta hai — tab higher volume follow-through chahiye. Low-volume breakout ke baad high-volume selloff = sell ya reduce."}, {"id": "S4-13", "q": "Subah volume data kam ho to?", "a": "Intraday extrapolate. Example: 5 lakh avg wala stock 10:30 tak 1.75 lakh = poore din ~10 lakh ke barabar — buy. Phir EOD total check."}, {"id": "S4-14", "q": "Bina bade volume ke breakout buy karoge?", "a": "Intraday final volume pata nahi hota; extrapolation ke baad bhi volume baad mein badh sakta hai. Price action pe buy, phir confirming volume dekho. Kaam na bane to sell kar sakte ho."}, {"id": "S4-15", "q": "Close pe volume confirm hone ka wait kyun nahi?", "a": "Move miss ho sakta hai — kai stocks dheere shuru hoke baad mein speed pakadte hain."}, {"id": "S4-16", "q": "X din baad volume na aaye to time stop?", "a": "Stock upar ja raha aur decent profit hai to kam volume pe bhi rukta hoon — par close watch, palatne pe jaldi sell."}, {"id": "S4-17", "q": "Breakout-day volume rule?", "a": "Volume apne 50-day average se upar ho. Kuch log 50% zyada lete hain; jitna zyada utna behtar."}, {"id": "S4-18", "q": "Breakout ke baad pullback pe patience?", "a": "Breakout area tak pullback/undercut aam hai — best names mein bhi lagbhag aadhe time. Best to ye ki turant follow-through ho; strongest starters aksar biggest winners. Initial stop hold kare to trade mein rehta hoon; achha move ho jaaye to stop breakeven pe."}, {"id": "S4-19", "q": "Kitne setups/patterns trade karte ho?", "a": "6–8, par sab basic breakout aur pullback buy ke variations. Main cheez VCP — consolidation mein left se right volatility kam hona."}]}, {"n": 5, "name": "Fundamentals", "items": [{"id": "S5-1", "q": "Pehle fundamentals ya chart?", "a": "Pehle chart aur long-term trend. Chart kharab/downtrend = fundamentals kitne bhi achhe, buy nahi."}, {"id": "S5-2", "q": "Buy se pehle research kitna?", "a": "Naya naam ho to earnings, news, group ke peers jitna time lage. Zyadatar stocks pehle se follow hote hain — bas entry banne aur earnings pe nazar."}, {"id": "S5-3", "q": "News sources?", "a": "Bahar ki opinions minimum — \"vacuum-packed\" environment, sirf facts. Decisions internally. Zyadatar sirf earnings, sales, margin data. Yahoo Finance ya Briefing.com chal jayega."}, {"id": "S5-4", "q": "Roz kitne stocks review?", "a": "Sainkdon charts, par deep fundamental research sirf kuch per day. Zyadatar story pehle se pata hoti hai; kabhi naya stock achanak aata hai to jaldi padhna padta hai."}, {"id": "S5-5", "q": "Kya wahi fundamental forces aaj bhi?", "a": "Bilkul — ye fact hai. 1930s ka Coca-Cola ~2000s ka Monster Beverage jaisa. 1980s mein Wal-Mart chhoti company thi. Sales-driven earnings hi bade moves chalati hain — hamesha."}, {"id": "S5-6", "q": "Shorting ke fundamental criteria?", "a": "Earnings deceleration top ka ishaara. Earnings pe bada hit ho to baad ki dead cat bounce short — agar technically stage 3 top ya better, stage 4 decline mein ho."}, {"id": "S5-7", "q": "Earnings momentum kaise measure?", "a": "YoY quarterly earnings jo last 1–4 quarters mein sequentially accelerate ho rahe ho. Saalon ki range se earnings ka breakout bhi positive. Earnings growth rate se upar accelerate kare to dhyan."}, {"id": "S5-8", "q": "Strong/accelerating sales zaroori?", "a": "Dono accelerate ho to best, par hamesha nahi milta. Warning: earnings achhe aur sales negative = limited life. Cost-cutting/productivity se earnings kuch time hi badhti hai — top-line growth chahiye."}, {"id": "S5-9", "q": "Margins/ROE?", "a": "Haan — expanding margins pasand. Negative sales ke bawajood earnings sudharne ka reason ye ho sakta hai, par lambe time nahi chalega. ROE ko group peers se compare karo; better stocks mein aam taur pe 15–17%+."}, {"id": "S5-10", "q": "Low-P/E momentum stocks?", "a": "P/E ki zyada parwah nahi. Ultra-low P/E se relatively high P/E behtar — high P/E = demand hai. Bahut low P/E = kuch gadbad ho sakti hai. High P/E mein galti ki gunjaish kam — bigde to jaldi niklo."}, {"id": "S5-11", "q": "Current quarterly growth vs long-term growth rate?", "a": "Long-term rate sirf ye check karne ke liye ki current growth historical se accelerate hui ya nahi. Future growth koi nahi jaanta (CEO bhi nahi); past growth rearview mirror. Focus current quarterly growth pe; better stocks mein current rate pehle se tez."}]}, {"n": 6, "name": "General Market", "items": [{"id": "S6-1", "q": "Indexes pe method?", "a": "Stocks trade karta hoon kyunki ye index pe leverage deta hai — Nasdaq 10% chale to leaders 5–10 guna."}, {"id": "S6-2", "q": "Overall market time karte ho? Koi gauge?", "a": "Zyada nahi. Ek market risk model hai jo turning points ke paas achha kaam karta hai, par focus individual stocks. Trade karne layak stocks nahi to indicator kya bolta hai, farq nahi."}, {"id": "S6-3", "q": "Market sell signal pe kaunse stocks bechein?", "a": "Stocks khud batate hain — stop hit ho ya achhe gain wale mein stop itna tight karo ki pullback pe zyada profit lock ho. Market pe bearish ho kar bhi sab opinion pe nahi bechta; stops tight, price action ek-ek karke nikaale. Aksar kuch names correction jhel jaate hain."}, {"id": "S6-4", "q": "Market bigde to — marginal winners pe profit, breakeven stop ya original stop?", "a": "Market sach mein trouble mein lage to marginal winners pe stop breakeven, bade winners pe backstop. Pehli natural reaction (pullback) jhelne deta hoon. Trouble wale ya bahut aage nikle stocks bech sakta hoon. Judgment aur balance — isliye trading art hai."}, {"id": "S6-5", "q": "Achha chart par market downtrend mein?", "a": "Correction/bear ka evidence ho to sideline ya bahut halka. Indices mein accumulation aur stocks set up ho rahe ho to chhoti \"pilot buys\". Pilot buys progress karein aur dusri wave ke stocks set up ho, averages mein follow-through ho — tab exposure jaldi badhata hoon."}, {"id": "S6-6", "q": "Distribution vs accumulation?", "a": "Market gire aur volume badhe = distribution; ulta = accumulation. Dekho tumhare stocks isko confirm karte hain ya nahi."}, {"id": "S6-7", "q": "Aggressive kab hona?", "a": "Main gauge: meri buys profit mein hain ya nahi. Chal rahe hain to aggressive; nahi to exposure aur positions kam. Simple rule: best trading pe sabse bada, worst pe sabse chhota — bade profit, chhote loss."}, {"id": "S6-8", "q": "IBD follow-through day se pehle leader breakout kare to buy?", "a": "FTD zaroori sirf bear market/badi correction ke baad — bottom se bade volume ke saath naya up-leg. Par main stocks pe zyada depend karta hoon. Index bottom hua matlab stocks ready nahi zaroori; kabhi leaders final low se pehle chal padte hain. To haan, FTD se pehle bhi buy. Market achha par koi stock criteria pe nahi = kuch nahi khareedna. Zyadatar traders index ignore karke sirf stocks dekhein to behtar karenge."}]}, {"n": 7, "name": "Entry Criteria", "items": [{"id": "S7-1", "q": "Kya cheez stock ko buy candidate banati hai?", "a": "Fundamental: earnings range se breakout aur accelerate, quarterly acceleration, \"breakout year\", badhti sales. Technical: relatively strong stocks jo sound base se low-risk entry pe nikal rahe ho."}, {"id": "S7-2", "q": "Full position ek baar mein ya incremental? Loss mein scale out?", "a": "Kabhi market ka pulse lene ke liye tiny position, phir progress pe scale in. Trades chalne lagein to seedha full size — \"rack run\" karne wale pool player ki tarah. Zyadatar incremental. Add karna ho to kabhi din ke end tak wait ki strong close ho."}, {"id": "S7-3", "q": "Breakout intraday buy ya close ka wait?", "a": "Intraday. Pivot toota to andar — buy point se kuch paise se 20–30 cents upar tak."}, {"id": "S7-4", "q": "Cash se fully invested kaise?", "a": "Stocks guide karte hain — jo buy point se nikle ek-ek karke kharido. Favorites ka wait nahi; neutral raho. Charts aur research pe bharosa; opinion lambe time mein paisa khilati hai."}, {"id": "S7-5", "q": "15 mein se 4–5 ek saath breakout kare to?", "a": "30+ saal mein 5 stocks bilkul ek saath kabhi breakout nahi hue; kuch paas-paas hote hain. Breakout levels pe pre-set limit buy-stop orders laga sakte ho."}, {"id": "S7-6", "q": "Entry point ki definition?", "a": "Livermore ki \"line of least resistance\" — trading range itni mature ho ki supply aana band ho jaaye. Kam supply + badi demand = explosive move."}, {"id": "S7-7", "q": "Jis stock mein recent loss hua usme dobara?", "a": "Haan, aksar — agar naya low-risk entry bane. Stop out hone se list se nahi hataata. Isliye toolbox mein alag-alag setups chahiye. Reset patterns do: (1) pivot-failure reset — kuch din mein recover; (2) base-failure reset — hafton-mahino mein, break kitna gehra usse depend."}, {"id": "S7-8", "q": "Shakeout ke baad usi din stock entry price waapas aa jaaye?", "a": "Kabhi intraday stop out wale stock mein waapas ghus jaata hoon — tape ki feel pe depend."}, {"id": "S7-9", "q": "MA pullback pe entry?", "a": "Kabhi 20-day ya 50-day pe — aam taur pe sound base breakout ke baad pehli ya dusri baar hi. Sirf jab stock upar turn ho, girte hue kabhi nahi. Ye bahut obvious method hai; akele se sab ameer ho jaate. Bull move ki shuruaat mein leaders mein kaam karta hai."}, {"id": "S7-10", "q": "Winners mein add karna?", "a": "Add karne se zyada sahi timing aur shuru se optimal size pe focus. Add tab jab chhoti position se shuru ki ho aur baad mein naya low-risk entry bane. Aksar din mein jaldi position shuru, aakhri 15–30 min mein strong close pe full size."}, {"id": "S7-11", "q": "Gaps buy karte ho? Buy point se upar gap?", "a": "Aam taur pe gap chase nahi. Buy point se kuch % se zyada upar gap = haath nahi lagata. Pasand: bade base se earnings pe gap-out, pivot se zyada door na ho — earnings bahut achhe to turant profit (Cabela's, Feb aur Jul 2012). Pichhle din ke low ke neeche gap = galat direction; same day breakout ke liye outside day/bullish engulfing chahiye. Unexpected gap pe knee-jerk entry nahi — plan ke saath aao."}]}, {"n": 8, "name": "Risk Management", "items": [{"id": "S8-1", "q": "Stop placement kaise?", "a": "Technical level acceptable risk ke saath match kare to chart kharab hone tak hold. Volatile names mein zyada risk ho to simple percentage stop. Kabhi fixed amount risk se backward position size."}, {"id": "S8-2", "q": "Total equity risk ka cap?", "a": "Max 2.5%. Average 0.75–1.25% per trade. 25% position × 10% stop = 2.5%; 5% stop = 1.25%."}, {"id": "S8-3", "q": "Gap aur overnight risk?", "a": "Roz flat na ho to gap risk rahega — khatam nahi, kam kar sakte ho position sizing se. Pichhle 3–6 mahine mein bade down gaps wale \"serial gappers\" se bacho. \"Sleeping point\" tak becho — neend na aaye to size bahut bada hai."}, {"id": "S8-4", "q": "Ek 10% loss ya do 5% loss?", "a": "Chhote losses aur zyada chances behtar. 10% maximum \"uncle\" point, par itna loss rarely. Tight stop = timing accurate chahiye; bada loss geometrically nuksaan karta hai. Timing sudharna gaddha bharne se behtar."}, {"id": "S8-5", "q": "Ek galat trade?", "a": "Cyclical stocks pasand nahi aur unme achha nahi karta, phir bhi Nov 2014 mein Alcoa liya. Kuch din upar, phir aaya — chhote loss pe becha; baad mein kaafi gira."}, {"id": "S8-6", "q": "Loss mein scale out ya ek saath sell?", "a": "Stop hit = poori position turant out. Kabhi stops stagger karta hoon (thirds ya halves) — average loss same rehta hai par kuch hissa trade mein rehne ka chance milta hai."}, {"id": "S8-7", "q": "Broker mein stop ya mental stop?", "a": "Aam taur pe mental. Stop current price ke bahut paas ho to \"gun\" ho sakta hai; liquid stock mein door ho to theek."}, {"id": "S8-8", "q": "Support 15–20% neeche ho to 10% stop?", "a": "10% se pehle hi bahar hona chahiye; rarely 10% girne deta hoon. Support jahan bhi ho, 15–20% risk kabhi nahi. Support door ho to comfortable percentage stop."}, {"id": "S8-9", "q": "Kam volume pe stop hit?", "a": "Stop hit = out, bas. Maths volume se nahi badalta."}, {"id": "S8-10", "q": "Choppy market mein baar-baar whipsaw?", "a": "Zyada whipsaw = ya selection criteria galat ya market hostile. Whipsaw market bear market se zyada khatarnak — bear mein cash mein aa jaate ho, whipsaw mein chhote-chhote losses se \"death by a thousand cuts\"."}, {"id": "S8-11", "q": "$20 buy, $19 stop, news pe $15 gap down?", "a": "Stop hit = sell. Warna stop ka matlab kya. Slippage trading ka hissa; uske saath bhi losses chhote rehte hain."}]}, {"n": 9, "name": "Trade Management", "items": [{"id": "S9-1", "q": "Core position ke around trading?", "a": "Haan. Bahut low-risk entry pe oversized position; jaldi upar jaaye to extra hissa bech ke short-term profit — baaki hold karna aasaan (cushion). Against jaaye to overweight turant kaato. Galat hone pe overweight aur sahi hone pe underweight — ulta hona chahiye."}, {"id": "S9-2", "q": "Recent winner aur loser trade?", "a": "Winner: Michaels (MIK), naya IPO — 6 Nov 2014 ko VCP se nikalte hue liya; 16 mein 13 din up close, 4 mahine se kam mein ~60%. Pehle nikal gaya par achha swing profit. Loser: Twitter (TWTR), Mar–Apr 2015 mein position. 28 Apr earnings close ke baad aane the par din mein leak ho gaye, stock gira. Kuch pehle becha, baaki halt se 6 minute pehle; reopen 15% gap down. Poore trade pe sirf 0.16% loss — leak ne bada gap-down loss bacha diya kyunki earnings mein hold karne wala tha."}, {"id": "S9-3", "q": "Holding period?", "a": "Winners losers se 2–3 guna zyada time. Winners 2–3 quarters, saalon tak rarely. Bade move ka main hissa 12–24 mahine mein. Paisa tez compound karna hai — swing trade, badi corrections mein hold rarely."}, {"id": "S9-4", "q": "Loss mein average down?", "a": "Lagbhag kabhi nahi. Sirf pullback pe position banate waqt, wapas upar jaate hue aur original price ke bahut paas. Bade loss wale stock mein kabhi aur nahi."}, {"id": "S9-5", "q": "Kitna upar = extended, add nahi?", "a": "Buy point se kuch % upar gaya to chhod deta hoon. Position sahi buy point pe hi. Chase nahi."}, {"id": "S9-6", "q": "Bade gain ke baad naya setup bane to aur khareedoge?", "a": "Haan, par pichhli purchase se chhota — average cost nahi badhana."}, {"id": "S9-7", "q": "Puts se hedge?", "a": "Lagbhag kabhi nahi. Kabhi bahut names ho to market short ETF se hedge taaki sab na bechna pade. Par pasand kuch hi names mein concentrated rehna — exposure jaldi badal sakta hoon."}, {"id": "S9-8", "q": "Profit pe trailing stops se scale out?", "a": "Achhe profit pe strength mein bechta hoon, weakness mein stop lagne se pehle. \"Sell half rule\": confuse ho to aadha becho — upar gaya to aadha bacha, neeche gaya to aadha bech diya; dono taraf sahi. Pasandida stock mein aadha bech ke stop breakeven — baaki \"free-roll\"."}, {"id": "S9-9", "q": "Full-time monitor nahi to trailing stops?", "a": "Haan, par shuru mein trade ko choke mat karo. Decent profit ke baad stop tight. Parabolic move mein bahut tight — steep move ke baad pullbacks bade."}, {"id": "S9-10", "q": "Target ke paas stop breakeven?", "a": "Stop hamesha improve, par jaldi choke nahi. Bada move = kam se kam breakeven. Bada gain kabhi loss nahi banne dena. Stock risk ka multiple ya average gain se upar jaaye tab tak aam taur pe breakeven pe nahi le jaata."}, {"id": "S9-11", "q": "Price targets?", "a": "Rarely. Chart dekhta hoon aur kitna up vs kitna risk kiya. Reward > risk to buy, downside risk > reward to sell. Stop loss ka 2–6 guna mile to bech sakta hoon; phir backstop ke saath follow."}, {"id": "S9-12", "q": "Stop se pehle weak stock bechna?", "a": "Buy ke turant baad \"violations\" dekhta hoon: kam volume pe breakout aur bhari volume pe waapas; bina support 3–4 lower lows; breakout ke turant baad 20-DMA ya worse 50-DMA ke neeche close; follow-through na hona; up se zyada down days. Violations jama ho to stop se pehle sell."}, {"id": "S9-13", "q": "Galat buy samajh aaye to sell?", "a": "Bilkul — turant sudhaaro. Paisa compound karna hai, galtiyan nahi."}, {"id": "S9-14", "q": "Bade profit wala stock pullback kare, market uptrend mein?", "a": "Fixed % nahi. Rule: decent profit ko loss nahi banne dena. Zyada move nahi hua to original stop; achha profit ho gaya to profit protection mode — gain ke bade hisse pe backstop. Ummeed ki pehle hi kuch strength mein bech chuka hoon (preferred)."}, {"id": "S9-15", "q": "Strength mein profit vs winners ko run karne dena?", "a": "High pakadne ki fikr nahi; tab bechta hoon jab risk-reward positive se negative ho. Naye bull market ki shuruaat mein winner ko zyada chalne deta hoon. Swing trade mein 1/3 se 1/2 ya 75% tak nikalta hoon, baaki bade move ke liye. Naye leader mein 50-DMA trailing sell point."}, {"id": "S9-16", "q": "Bada move hold vs swing profit?", "a": "Pehle style decide karo — trader ya investor; warna dono taraf pachtaoge. Key: achha gain aur losses winners se chhote. Naye bull market ki shuruaat hold karne ka best time; late stage (kai saal baad) mein chhote moves aur strength mein sell."}, {"id": "S9-17", "q": "Time stop?", "a": "Entry pe jo expect kiya uske basis pe. Train 6:05 ki hai aur 7:45 tak nahi aayi to kuch gadbad hai. Expectation aur reality mein farq = sell. Aksar sirf isliye bechta hoon ki stock ne expected kaam nahi kiya."}, {"id": "S9-18", "q": "Earnings ke aage positions?", "a": "Kabhi hold, kabhi nahi. Profit cushion nahi to shares kam, khaas kar oversized ho. Badi position earnings mein kabhi nahi. Kharab report pe tootе to lagbhag hamesha turant sell — baad mein waapas aaye to farq nahi; ego nahi, portfolio bachana hai. Options se hedge possible, main aam taur pe nahi karta."}, {"id": "S9-19", "q": "Fully invested ho aur naya setup aaye to kya bechein?", "a": "Extended stock bech ke fresh breakout le sakta hoon, par short-term extended strong stocks bechne mein saavdhan — wahi aur upar jaate hain. Strongest mein kuch shares hold. Losers pehle bechta hoon; stops lagte hi cash apne aap."}, {"id": "S9-20", "q": "Kuch din/hafton mein 20%+ bhaage winners?", "a": "Bahut strong ho to extra time. Kuch hissa bech, baaki hold. Naye bull market ki shuruaat mein strongest stocks bade leader ho sakte hain — extended hone pe jaldi mat becho."}, {"id": "S9-21", "q": "Successful trades manage, sell signals?", "a": "High kabhi nahi milega; goal kharid se upar bechna aur risk se zyada banana, baar-baar. Decent profit pe stop breakeven. Strength mein bechna pasand. Trailing stops pasand nahi, \"backstop\" lagata hoon — gain ka ek hissa protect, uske upar trade karne do. Aur upar jaaye to sell ya backstop raise; dheere-dheere tight karke profit lock."}]}, {"n": 10, "name": "Psychology", "items": [{"id": "S10-1", "q": "Discipline, overtrading se bachna?", "a": "Stocks aur criteria guide karein. Trade karne ki \"urge\" plan ka hissa nahi. Criteria mile to trade, na mile to baitho. Simple — agar opinion se alag ho sako."}, {"id": "S10-2", "q": "Analysis paralysis se kaise niklein?", "a": "Nervous ho to itna chhota trade karo jitna comfortable ho. Confidence dheere aayega — bas loss kaato aur bade drawdown se bacho. Bade losses paisa aur confidence dono todte hain."}, {"id": "S10-3", "q": "Badi positions ka confidence?", "a": "Chhote se shuru. Shuru mein kam confidence bura nahi — overconfidence se risky trade, bada loss, sab confidence gayab. Humble shuru karo, ek-ek trade se confidence banao."}, {"id": "S10-4", "q": "Lagataar losses pe kya adjust?", "a": "Chhota trade. Jitna zyada haaro utna chhota. Series of losses = market conditions sahi nahi."}, {"id": "S10-5", "q": "Saalon se same strategy — style drift kaise nahi?", "a": "Commitment. Strategy ke saath rishta shaadi jaisa — cheat karoge to kaisi shaadi? Jo samajh aaye aur jispe bharosa ho, uspe commit karo. Raaton-raat success nahi."}, {"id": "S10-6", "q": "Discipline se bhatke ho? Wapas kaise?", "a": "Insaan hoon, haan — par thoda aur jaldi wapas. Shuru mein baar-baar bhatakta tha; results bhi utne hi inconsistent. Phir tay kiya plan pe tikna aur galtiyon ko itna gehraai se samajhna ki dohrayein nahi. Rules aur plan ho to mushkil faisle mein sochna nahi padta. Observations mein flexible, philosophy mein nahi."}, {"id": "S10-7", "q": "Kuch bade winners + bahut chhote losers, ya zyada winners?", "a": "Failure ko system mein build karo — low win rate pe bhi profitable. Zyada chhote losses theek. Edge ko gains ke mukable losses manage karke control karo; win % pe direct control nahi hota."}, {"id": "S10-8", "q": "Strategy broken hai ya bas out of favor?", "a": "Timeless principles hain — supply/demand badle tabhi tootenge, jaise gravity badalna. Har strategy kabhi underperform karti hai; us waqt kam haaro aur wapsi ke liye ready raho."}, {"id": "S10-9", "q": "Profitable hone se pehle positive kaise rahe?", "a": "Timeless truths pe based approach — \"strategy factor\" ka sawal hat gaya, bacha sirf main. Results ki zimmedari li, bahar ke factors ko blame nahi. Objective raho, galtiyon se seekho, phir discipline. Khud pe vishwas aur commitment. Deadline mat rakho — 1 saal mein nahi to 2, 2 mein nahi to 3. Deadline rakhi to fate tay. Bandook nahi, chalane wala matter karta hai."}, {"id": "S10-10", "q": "Post-analysis?", "a": "Bahut bada fan — isne career palta. Apna software tool banaya (Private Access members ko bhi deta hoon) with proprietary distribution curve. Simple tareeka: chart pe buy/sell mark karo, common patterns dhoondo. Regular feedback loop, seekh wapas trading mein daalo."}]}, {"n": 11, "name": "Final Thoughts", "items": [{"id": "S11-1", "q": "Sabse badi rukawatein?", "a": "Religiously discipline — \"bas is baar\" wale moments band karna. Zyadatar loss kaatta tha par kabhi-kabhi pakad ke baith jaata, wahi kuch bade losses tabahi karte. Patience — FOMO bahut failures ki jad. Do main rules: (1) forced trades nahi, (2) bade losses nahi. \"Sit-out power\" develop karo; kaam na kare to jaldi loss kaato."}, {"id": "S11-2", "q": "Learning curve mein sabse zyada kya kaam aaya?", "a": "Sab kuch — par sabse zyada apne past trades analyze karna aur baar-baar hone wali galtiyan samajhna. Common denominators mile, phir kamzoriyon ko strength banaya."}, {"id": "S11-3", "q": "Mentor kitna zaroori?", "a": "Achha mentor ho to bahut — learning curve chhota, nayi cheezein. Galat cheez practice karoge to perfect nahi hoge — mentor dhyan se chuno. Mentor ne wo achieve kiya ho jo tum chahte ho. Jisne million nahi kamaya usse million kamana kaise seekhoge?"}, {"id": "S11-4", "q": "Sabse bada \"aha\" moment?", "a": "Sahi risk management ke saath double/triple hone wale stocks ki zaroorat nahi triple-digit returns ke liye. Chhote moves se bhi huge aur consistent returns. Risk vs reward + turnover = holy grail."}, {"id": "S11-5", "q": "Top 5 rules?", "a": "1. Pehle risk socho — hamesha stop loss, entry se pehle exit pata ho. 2. Losses chhote rakho; decent profit ke baad breakeven protect karo. 3. Jitna gain expect ho usse zyada risk kabhi nahi. 4. Average down kabhi nahi. 5. Apni trading ka sach jaano — results regularly study karo."}, {"id": "S11-6", "q": "Average investor fail kyun hota hai?", "a": "Kharab selection criteria; loss nahi kaatna (sabse common); losing positions mein add karna (account udne ka #1 reason); profit protect nahi karna — achha gain loss ban jaata hai; post-analysis nahi karna; strategy pe commit nahi — style drift aur jaldi haar maanna; discipline tootna — rules ho kar bhi todna."}, {"id": "S11-7", "q": "Naye trader ko advice?", "a": "Achha role model lo jisne wo achieve kiya ho. Pehle kuch saal kharab ho to niraash mat ho. Galtiyan hongi — wahi best teacher. Action lo, experience banao; koi bhi plan no plan se behtar. Mehnat karo, failures own karo, tab success own karoge. Koi \"secret\" nahi. Sabse bada challenge strategy pe tikna aur discipline — zyadatar log successful strategy mil ke bhi fail honge kyunki learning curve aur mushkil daur nahi jhel paate."}]}];
+const ALL = DATA.flatMap(s => s.items.map(i => ({...i, sec:s.n, secName:s.name})));
+let state = {done:{}, star:{}};
+let sec = 0, open = new Set(), allOpen = false;
+const KEY = 'minervini-notes-v1';
+
+async function load(){
+  try{
+    if(window.storage){ const r = await window.storage.get(KEY,false); if(r&&r.value) state = JSON.parse(r.value); }
+    else { const v = localStorage.getItem(KEY); if(v) state = JSON.parse(v); }
+  }catch(e){}
+  render();
+}
+async function save(){
+  try{ if(window.storage) await window.storage.set(KEY, JSON.stringify(state), false); else localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){ console.error(e); }
+}
+const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function hi(text, term){
+  let t = esc(text);
+  if(!term) return t;
+  const r = new RegExp('('+term.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi');
+  return t.replace(r,'<mark>$1</mark>');
+}
+function fmt(a, term){
+  return a.split('\n').filter(Boolean).map(p => '<p>'+hi(p,term)+'</p>').join('');
+}
+
+function chips(){
+  const c = document.getElementById('chips');
+  const opts = [{n:0,name:'Sab'}].concat(DATA.map(s=>({n:s.n,name:s.name})));
+  c.innerHTML = opts.map(o => `<button class="chip" data-n="${o.n}" aria-pressed="${o.n===sec}">${o.n?o.n+'. ':''}${esc(o.name)}</button>`).join('');
+  c.querySelectorAll('.chip').forEach(b => b.onclick = () => { sec = +b.dataset.n; chips(); render(); });
+}
+
+function spark(){
+  const svg = document.getElementById('spark');
+  const pts = DATA.map((s,i) => {
+    const d = s.items.filter(x=>state.done[x.id]).length / s.items.length;
+    return [i*(300/(DATA.length-1)), 50 - d*44];
+  });
+  const path = pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+  svg.innerHTML = `<line x1="0" y1="50" x2="300" y2="50" stroke="#C9D4CF" stroke-width="1"/>
+    <path d="${path} L300 56 L0 56 Z" fill="#1E7A4C" opacity=".08"/>
+    <path d="${path}" fill="none" stroke="#1E7A4C" stroke-width="2" vector-effect="non-scaling-stroke"/>
+    ${pts.map(p=>`<circle cx="${p[0]}" cy="${p[1]}" r="2.2" fill="#1E7A4C"/>`).join('')}`;
+  document.getElementById('doneN').textContent = Object.values(state.done).filter(Boolean).length;
+}
+
+function render(){
+  const term = document.getElementById('q').value.trim();
+  const fStar = document.getElementById('fStar').checked;
+  const fTodo = document.getElementById('fTodo').checked;
+  const tl = term.toLowerCase();
+  let html = '', count = 0;
+  for(const s of DATA){
+    if(sec && s.n !== sec) continue;
+    const items = s.items.filter(i =>
+      (!tl || (i.q+' '+i.a+' '+i.id).toLowerCase().includes(tl)) &&
+      (!fStar || state.star[i.id]) && (!fTodo || !state.done[i.id]));
+    if(!items.length) continue;
+    const d = s.items.filter(x=>state.done[x.id]).length;
+    html += `<h2>${s.n}. ${esc(s.name)} <span>${d}/${s.items.length}</span></h2>`;
+    for(const i of items){
+      count++;
+      const isOpen = allOpen || open.has(i.id) || !!tl;
+      html += `<article class="qa ${isOpen?'open':''} ${state.done[i.id]?'done':''} ${state.star[i.id]?'star':''}" data-id="${i.id}">
+        <button class="qhead" aria-expanded="${isOpen}"><span class="qid">${i.id}</span><span class="qtext">${hi(i.q,term)}</span><span class="caret">›</span></button>
+        <div class="ans">${fmt(i.a,term)}
+          <div class="acts">
+            <button class="mini m-done" aria-pressed="${!!state.done[i.id]}">${state.done[i.id]?'Yaad hai ✓':'Yaad hai?'}</button>
+            <button class="mini m-star" aria-pressed="${!!state.star[i.id]}">${state.star[i.id]?'Starred ★':'Star ☆'}</button>
+          </div>
+        </div></article>`;
+    }
+  }
+  document.getElementById('list').innerHTML = count ? html : `<div class="empty">Kuch nahi mila. Search ya filter badlo.</div>`;
+  spark();
+}
+
+document.getElementById('list').addEventListener('click', e => {
+  const art = e.target.closest('.qa'); if(!art) return;
+  const id = art.dataset.id;
+  if(e.target.closest('.qhead')){ open.has(id)?open.delete(id):open.add(id); art.classList.toggle('open'); art.querySelector('.qhead').setAttribute('aria-expanded', art.classList.contains('open')); return; }
+  if(e.target.closest('.m-done')){ state.done[id] = !state.done[id]; save(); open.add(id); render(); }
+  if(e.target.closest('.m-star')){ state.star[id] = !state.star[id]; save(); open.add(id); render(); }
+});
+document.getElementById('q').addEventListener('input', render);
+document.getElementById('fStar').addEventListener('change', render);
+document.getElementById('fTodo').addEventListener('change', render);
+document.getElementById('expand').onclick = e => { allOpen = !allOpen; if(!allOpen) open.clear(); e.target.textContent = allOpen?'Sab band karo':'Sab kholo'; render(); };
+
+/* flashcards: pick from current section, prefer not-yet-learned */
+let cur = null;
+function pool(){
+  let p = ALL.filter(i => !sec || i.sec===sec);
+  const todo = p.filter(i => !state.done[i.id]);
+  return todo.length ? todo : p;
+}
+function nextCard(){
+  const p = pool(); cur = p[Math.floor(Math.random()*p.length)];
+  document.getElementById('cid').textContent = cur.id+'  ·  '+cur.secName;
+  document.getElementById('cq').textContent = cur.q;
+  document.getElementById('ca').innerHTML = fmt(cur.a,'');
+  document.getElementById('card').classList.remove('rev');
+}
+const fc = document.getElementById('fc');
+function tab(id){ ['tNotes','tCards','tStar'].forEach(x=>document.getElementById(x).setAttribute('aria-current', x===id)); }
+document.getElementById('tNotes').onclick = () => { tab('tNotes'); fc.classList.remove('on'); document.getElementById('fStar').checked=false; render(); window.scrollTo({top:0}); };
+document.getElementById('tCards').onclick = () => { tab('tCards'); nextCard(); fc.classList.add('on'); document.getElementById('reveal').focus(); };
+document.getElementById('tStar').onclick = () => { tab('tStar'); fc.classList.remove('on'); document.getElementById('fStar').checked=true; render(); window.scrollTo({top:0}); };
+document.getElementById('reveal').onclick = () => document.getElementById('card').classList.add('rev');
+document.getElementById('next').onclick = nextCard;
+document.getElementById('know').onclick = () => { state.done[cur.id] = true; save(); render(); nextCard(); };
+document.getElementById('close').onclick = () => { fc.classList.remove('on'); tab('tNotes'); };
+fc.addEventListener('click', e => { if(e.target===fc) fc.classList.remove('on'); });
+document.addEventListener('keydown', e => { if(e.key==='Escape') fc.classList.remove('on'); });
+
+chips(); load();
+
+/* PWA: offline + install */
+if('serviceWorker' in navigator && location.protocol.startsWith('http')){
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
+let deferred;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferred = e; document.getElementById('installBtn').classList.add('show'); });
+document.getElementById('installBtn').onclick = async () => { if(!deferred) return; deferred.prompt(); await deferred.userChoice; deferred = null; document.getElementById('installBtn').classList.remove('show'); };
+</script>
+</body>
+</html>
