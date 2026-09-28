@@ -82,6 +82,7 @@ mark{background:#FFE58A;color:inherit;padding:0 1px}
 .tabbar button{flex:1;background:none;border:0;color:#9FB3BF;font-size:12.5px;font-weight:600;padding:10px 0 12px;display:flex;flex-direction:column;align-items:center;gap:3px}
 .tabbar button svg{width:22px;height:22px}
 .tabbar button[aria-current=true]{color:#fff}
+#pbView{padding:0 0 calc(80px + env(safe-area-inset-bottom))}
 .install{display:none;margin-top:12px}
 .install.show{display:inline-block}
 body{overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent}
@@ -119,10 +120,13 @@ body{overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent}
   <main id="list"></main>
 </div>
 
+<div id="pbView" hidden></div>
+
 <nav class="tabbar" aria-label="App">
   <button id="tNotes" aria-current="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16M4 12h16M4 19h10"/></svg>Notes</button>
   <button id="tCards"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="6" width="16" height="12" rx="1"/><path d="M8 3h12v12"/></svg>Flashcards</button>
   <button id="tStar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg>Starred</button>
+  <button id="tPlay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 20h18"/><path d="M4 16l5-6 4 3 7-8"/><path d="M15 5h5v5"/></svg>Playbook</button>
 </nav>
 
 <div class="fc" id="fc" role="dialog" aria-modal="true" aria-label="Flashcard">
@@ -246,7 +250,7 @@ function nextCard(){
   document.getElementById('card').classList.remove('rev');
 }
 const fc = document.getElementById('fc');
-function tab(id){ ['tNotes','tCards','tStar'].forEach(x=>document.getElementById(x).setAttribute('aria-current', x===id)); }
+function tab(id){ ['tNotes','tCards','tStar','tPlay'].forEach(x=>document.getElementById(x).setAttribute('aria-current', x===id)); }
 document.getElementById('tNotes').onclick = () => { tab('tNotes'); fc.classList.remove('on'); document.getElementById('fStar').checked=false; render(); window.scrollTo({top:0}); };
 document.getElementById('tCards').onclick = () => { tab('tCards'); nextCard(); fc.classList.add('on'); document.getElementById('reveal').focus(); };
 document.getElementById('tStar').onclick = () => { tab('tStar'); fc.classList.remove('on'); document.getElementById('fStar').checked=true; render(); window.scrollTo({top:0}); };
@@ -258,6 +262,748 @@ fc.addEventListener('click', e => { if(e.target===fc) fc.classList.remove('on');
 document.addEventListener('keydown', e => { if(e.key==='Escape') fc.classList.remove('on'); });
 
 chips(); load();
+
+/* ===== Playbook tab (shadow-DOM isolated) ===== */
+const PB_TEMPLATE = `<style>
+:host{display:block;--bg:#EDF1EF;--panel:#F4F7F5;--panel2:#FFFFFF;--line:#C9D4CF;--ink:#1B2A35;--mute:#5A6B75;--amber:#B86E00;--teal:#0E7F74;--up:#1E7A4C;--dn:#B3322B;--blue:#2F5FD0;--pink:#A8367F;
+--head:Archivo,system-ui,sans-serif;--hand:Archivo,system-ui,sans-serif;--body:'Source Serif 4',Georgia,serif}
+*{box-sizing:border-box}
+.pbw{color:var(--ink);font:17px/1.6 var(--body)}
+a{color:var(--blue)}
+.wrap{max-width:1080px;margin:0 auto;padding:0 18px}
+header.hero{padding:56px 0 30px}
+.hero small{font-family:var(--hand);color:var(--mute);font-size:16px}
+.hero h1{font-family:var(--head);font-size:clamp(40px,8vw,84px);line-height:.98;margin:10px 0 0;letter-spacing:-.5px}
+.hero h1 span{display:block}
+.uline{height:8px;width:min(560px,80%);margin:14px 0 20px}
+.hero p{max-width:640px;color:var(--mute);margin:0 0 8px}
+.hero .note{font-family:var(--hand);color:var(--amber);font-size:17px}
+nav.toc{position:sticky;top:env(safe-area-inset-top);z-index:20;background:rgba(237,241,239,.95);backdrop-filter:blur(6px);border-bottom:1px solid var(--line)}
+nav.toc .wrap{display:flex;gap:8px;overflow-x:auto;padding-top:10px;padding-bottom:10px;scrollbar-width:none}
+nav.toc a{flex:none;text-decoration:none;color:var(--mute);font-family:var(--hand);font-size:15px;padding:4px 12px;border:1px solid var(--line);border-radius:20px;white-space:nowrap}
+nav.toc a.on{color:#ffffff;background:var(--amber);border-color:var(--amber)}
+section.ch{scroll-margin-top:70px;padding:48px 0 20px;border-bottom:1px dashed var(--line)}
+.chno{font-family:var(--head);font-size:15px;color:var(--c,var(--amber));display:flex;align-items:center;gap:10px}
+.chno b{display:inline-grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--c,var(--amber));color:#ffffff;font-size:16px}
+section.ch h2{font-family:var(--head);font-size:clamp(28px,4.6vw,44px);line-height:1.05;margin:10px 0 14px}
+.lead{font-size:19px;max-width:720px;color:var(--ink)}
+.rules{list-style:none;padding:0;margin:22px 0;display:grid;gap:10px;max-width:780px}
+.rules li{position:relative;padding:10px 14px 10px 44px;background:#fff;border:1px solid var(--line);border-left-width:3px;border-left:3px solid var(--c,var(--amber));border-radius:0 8px 8px 0}
+.rules li::before{content:attr(data-n);position:absolute;left:12px;top:10px;font-family:var(--hand);font-weight:700;color:var(--c,var(--amber))}
+.rules b{color:var(--ink);font-family:var(--head)}
+h3{font-family:var(--hand);font-size:24px;margin:34px 0 8px;color:var(--c,var(--amber))}
+.card{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px;margin:14px 0}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.tabs button,.stepbar button,.btn{font:600 14px var(--body);background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer}
+.tabs button.on{background:var(--c,var(--amber));color:#ffffff;border-color:transparent}
+button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+.chart{position:relative}
+.chart{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.chart svg{width:100%;height:auto;display:block;touch-action:pan-x pan-y}
+@media (max-width:600px){.chart svg{min-width:680px}.chart .tip{position:sticky;left:0;display:inline-block;margin-bottom:4px}}
+.tip{position:absolute;top:6px;left:8px;font:13px var(--body);color:var(--mute);background:rgba(255,255,255,.92);padding:2px 8px;border-radius:6px;pointer-events:none}
+.stepbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.stepbar .dots{display:flex;gap:5px;flex-wrap:wrap}
+.stepbar .dots button{padding:3px 10px;font-family:var(--hand);font-size:14px}
+.stepbar .dots button.on{background:var(--c,var(--amber));color:#ffffff}
+.narr{margin-top:10px;padding:12px 14px;border-radius:10px;background:#fff;border:1px dashed var(--c,var(--amber));min-height:64px}
+.narr b{font-family:var(--hand);font-size:19px;color:var(--c,var(--amber));display:block}
+.ctrls{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:10px}
+.ctrls label{font-size:14px;color:var(--mute);display:block}
+.ctrls label output{color:var(--ink);font-weight:700;float:right}
+input[type=range]{width:100%;accent-color:var(--c,var(--amber))}
+input[type=number]{width:100%;background:var(--panel);border:1px solid var(--line);color:var(--ink);border-radius:6px;padding:6px 8px;font:15px var(--body)}
+.stat{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0}
+.stat div{flex:1 1 140px;background:var(--panel);border-radius:10px;padding:8px 12px}
+.stat small{color:var(--mute);display:block;font-size:13px}
+.stat strong{font-family:var(--head);font-size:22px}
+.good{color:var(--up)}.bad{color:var(--dn)}.warn{color:var(--amber)}
+.tt{display:grid;gap:6px}
+.tt div{display:flex;gap:10px;align-items:center;padding:6px 10px;background:var(--panel);border-radius:8px;font-size:15px}
+.tt i{font-style:normal;width:22px;text-align:center;font-weight:700}
+.keys{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}
+.keys div{background:var(--panel);border-radius:10px;padding:12px 14px;border-top:3px solid var(--kc)}
+.keys b{font-family:var(--hand);font-size:19px;color:var(--kc);display:block}
+.alloc{display:flex;height:34px;border-radius:8px;overflow:hidden;margin:6px 0 2px}
+.alloc span{display:grid;place-items:center;font-size:12px;font-weight:700;color:#ffffff}
+footer{padding:40px 0 60px;color:var(--mute);font-size:14px}
+.hand{font-family:var(--hand)}
+@media (max-width:600px){.pbw{font-size:16px}.lead{font-size:17px}.rules li{padding-left:38px}}
+
+
+.hero h1,section.ch h2,.chno,.stat strong{font-weight:800;letter-spacing:-.02em}
+.card{box-shadow:none}
+.ctrls label,.stat small,.tip,.tabs button,.stepbar button{font-family:var(--head)}
+.narr{font-family:var(--body)}
+</style><div class="pbw">
+
+<header class="hero wrap">
+  <small>Think &amp; Trade Like a Champion — Mark Minervini · Hinglish study companion</small>
+  <h1><span>Champion</span><span>Playbook.</span></h1>
+  <svg class="uline" viewBox="0 0 560 8" preserveAspectRatio="none"><path d="M2 5 C140 1,330 8,558 3" stroke="#1E7A4C" stroke-width="5" fill="none" stroke-linecap="round"/></svg>
+  <p>Book ke 11 sections ke rules, apni bhasha mein. Har rule ke saath ek chart jise tum chala sakte ho — steps dabao, slider khiskao, candle par ungli rakho.</p>
+  <p class="note">Charts synthetic data se bane hain (concept samjhane ke liye). Ye notes book ke saath padhne ke liye hain, book ki jagah nahi.</p>
+</header>
+
+<nav class="toc" aria-label="Chapters"><div class="wrap" id="toc"></div></nav>
+
+<main class="wrap">
+
+<!-- INTRO -->
+<section class="ch" id="s0" data-t="Shuruaat" style="--c:var(--mute)">
+  <div class="chno"><b>0</b>Introduction</div>
+  <h2>Mehnat nahi, sahi practice</h2>
+  <p class="lead">Galat cheez ki practice karoge to galat habit hi pakki hogi. Book ka poora focus ek repeatable process par hai — kya kharidna, kab, kitna, aur kab bahar nikalna — taaki har trade ek hi tareeke se ho, mood se nahi.</p>
+  <ul class="rules">
+    <li data-n="→"><b>Knowledge ke teen stage:</b> pehle rules jaano, phir unhe apply karo, aur teesra — itni baar karo ki bina soche ho jaaye. Asli fayda teesre stage mein hai.</li>
+    <li data-n="→"><b>Action lo:</b> padhne se kuch nahi hota. Chhoti size se real trades karo, record rakho, sudharo.</li>
+  </ul>
+</section>
+
+<!-- S1 -->
+<section class="ch" id="s1" data-t="1 · Plan" style="--c:var(--pink)">
+  <div class="chno"><b>1</b>Section 1</div>
+  <h2>Hamesha plan lekar ghuso</h2>
+  <p class="lead">Umeed plan nahi hai. Buy dabane se pehle har situation ka jawab likha hona chahiye, taaki pressure mein dimaag ko sochna na pade — sirf execute karna pade.</p>
+  <ul class="rules">
+    <li data-n="1"><b>Paanch contingency jawab:</b> stop kahan; stop hone ke baad dobara kab kharidoge; strength mein kab bechoge; weakness mein kab; aur achanak disaster (gap-down, news) mein kya karoge.</li>
+    <li data-n="2"><b>Priority ka order:</b> (a) loss limit karo → (b) achha profit ho jaaye to breakeven protect karo → (c) bada gain trailing stop ya back stop se bachao.</li>
+    <li data-n="3"><b>Follow-through dekho:</b> breakout ke pehle 1–2 hafte mein up days zyada — 4 mein 3, 8 mein 6. Closes din ki range ke upper half mein. Tennis ball ki tarah uchhle, ande ki tarah na toote.</li>
+    <li data-n="4"><b>Warning signs:</b> low volume breakout aur high volume wapsi; bina support ke 3 lower lows; down days &gt; up days; bad closes &gt; good closes; breakout ke jaldi baad 20-DMA ke neeche close; heavy volume par 50-DMA break; achha gain poora wapas.</li>
+    <li data-n="5"><b>Ek violation = alert, kai violations = exit.</b> Akele 20-DMA break par panic nahi, lekin signals jud rahe hon to plan follow karo.</li>
+    <li data-n="6"><b>Squat &amp; reversal recovery:</b> breakout ke din stock range mein wapas aakar low ke paas close kare to turant mat bhaago. Bull market mein kuch din (10 tak) recovery ka mauka do — stop ke andar rehkar.</li>
+    <li data-n="7"><b>Paralysis-regret cycle todo:</b> plan na ho to "kharidun? bechun? hold karun?" mein atakte ho, phir pachhtaate ho. Plan pehle se decision le leta hai.</li>
+  </ul>
+  <h3>Chart: teen scenarios</h3>
+  <div class="card"><div class="tabs" id="s1tabs"></div><div id="s1chart"></div></div>
+</section>
+
+<!-- S2 -->
+<section class="ch" id="s2" data-t="2 · Risk-first" style="--c:var(--dn)">
+  <div class="chno"><b>2</b>Section 2</div>
+  <h2>Har trade risk se shuru</h2>
+  <p class="lead">Pehla sawaal "kitna banega?" nahi, "exit kahan hai?" hai. Rules tabhi kaam ke hain jab discipline ho — stop hit hua to sell, bahas baad mein.</p>
+  <ul class="rules">
+    <li data-n="1"><b>Emotional stop mat rakho.</b> "Dekh lete hain" wala mental stop ek din bada loss banega. Stop pehle se fixed, aur hit hote hi exit.</li>
+    <li data-n="2"><b>Max loss 10%, average isse kaafi kam.</b> Loss geometric hota hai: −10% ke liye +11% chahiye, −50% ke liye +100%, −90% ke liye +900%.</li>
+    <li data-n="3"><b>Bucking bronco se bacho.</b> Jo stock itna jhoolta hai ki normal swing hi tumhara stop tod de, woh tumhare liye nahi. Bazaar mein aur ghode hain.</li>
+    <li data-n="4"><b>Risk mein "back" mat karo.</b> Extended stock kharidoge to logical stop door hoga — risk khud bada ho jaata hai. Pivot/danger point ke paas kharido jahan stop tight baithe.</li>
+    <li data-n="5"><b>Tum kya control karte ho:</b> kya kharidna, kitna, kab — aur trade ke baad sirf kab bechna. Market tumhare control mein nahi; apna exit hai.</li>
+  </ul>
+  <h3>Loss ka geometric math</h3>
+  <div class="card">
+    <div class="ctrls"><label>Loss %<output id="lossO"></output><input type="range" id="lossR" min="1" max="90" value="30"></label></div>
+    <div id="s2curve"></div>
+  </div>
+  <h3>Bucking bronco test</h3>
+  <div class="card">
+    <div class="ctrls"><label>Tumhara stop %<output id="brO"></output><input type="range" id="brR" min="3" max="15" value="7"></label></div>
+    <div id="s2bronco"></div>
+    <div class="stat" id="s2bstat"></div>
+  </div>
+</section>
+
+<!-- S3 -->
+<section class="ch" id="s3" data-t="3 · Reward > Risk" style="--c:var(--amber)">
+  <div class="chno"><b>3</b>Section 3</div>
+  <h2>Jitna kamane ki umeed, usse zyada risk kabhi nahi</h2>
+  <p class="lead">50% trades galat hon tab bhi paisa banta hai — agar jeet ka size haar se bada ho. Lekin ratio ka ek sweet spot hota hai; usse zyada door stop rakhna bhi return kam karta hai.</p>
+  <ul class="rules">
+    <li data-n="1"><b>Batting average + gain/loss ratio</b> saath mein dekho. Akela koi bhi number jhooth bolta hai.</li>
+    <li data-n="2"><b>Har ratio barabar nahi:</b> 40% batting par ~20% gain / 10% loss sabse achha return deta hai. Gain aur loss dono ko proportion mein badhaoge to return girne lagta hai.</li>
+    <li data-n="3"><b>Expectation apne results se set karo:</b> agar tumhara average gain 12% hai to 10% stop ka koi matlab nahi.</li>
+    <li data-n="4"><b>Stop kab upar karein:</b> jab stock tumhare risk ka 2–3 guna upar ho aur gain tumhare average se zyada ho — kam se kam breakeven. Natural reaction ke baad naya high bane tab bhi.</li>
+    <li data-n="5"><b>Staggered stops:</b> poori position ek hi price par mat rakho; hisson mein alag stops se ek hi shakeout mein sab nahi jaata.</li>
+    <li data-n="6"><b>Add &amp; Reduce:</b> profit se naya risk finance karo — size double, rupee risk wahi.</li>
+    <li data-n="7"><b>Premium hands ka wait:</b> poker pro ki tarah har haath mat khelo. Best setup aane tak cash theek hai.</li>
+  </ul>
+  <h3>Ratio ka sweet spot</h3>
+  <div class="card">
+    <div class="ctrls">
+      <label>Batting average %<output id="baO"></output><input type="range" id="baR" min="25" max="70" value="40"></label>
+      <label>Gain : Loss ratio<output id="rtO"></output><input type="range" id="rtR" min="1" max="4" step=".5" value="2"></label>
+    </div>
+    <div id="s3opt"></div>
+    <div class="stat" id="s3stat"></div>
+  </div>
+  <h3>Chart: 3R par stop breakeven, phir Add &amp; Reduce</h3>
+  <div class="card"><div id="s3chart"></div></div>
+  <h3>Add &amp; Reduce calculator</h3>
+  <div class="card">
+    <div class="ctrls">
+      <label>Pehli buy ₹<input type="number" id="pa1" value="500"></label>
+      <label>Qty<input type="number" id="pq" value="100"></label>
+      <label>Stop distance ₹<input type="number" id="pd" value="30"></label>
+      <label>Naya buy point ₹<input type="number" id="pa2" value="560"></label>
+    </div>
+    <div class="stat" id="pyr"></div>
+  </div>
+</section>
+
+<!-- S4 -->
+<section class="ch" id="s4" data-t="4 · Sach jaano" style="--c:var(--blue)">
+  <div class="chno"><b>4</b>Section 4</div>
+  <h2>Apni trading ka sach jaano</h2>
+  <p class="lead">Jo naapte nahi, woh sudharta nahi. Journal aur spreadsheet batate hain ki problem entry mein hai, stop mein, ya bechne mein — andaaza nahi.</p>
+  <ul class="rules">
+    <li data-n="1"><b>Trading triangle:</b> average win, average loss, batting average. Teeno ka balance hi tumhari edge hai.</li>
+    <li data-n="2"><b>Track karo:</b> avg win, avg loss, sabse bade win/loss, aur jeet vs haar kitne din hold ki. Haar zyada din hold ho rahi hai to red flag.</li>
+    <li data-n="3"><b>Personal bell curve:</b> loss wali side chhoti aur tight, profit wali side ki poonchh lambi — yahi shape chahiye.</li>
+    <li data-n="4"><b>Monthly tracker:</b> har mahine ke numbers alag, taaki pata chale kab strategy market se sync mein hai.</li>
+    <li data-n="5"><b>Turnover &amp; opportunity cost:</b> dead money wala stock bhi nuksaan hai — paisa kahin aur tez chal sakta tha.</li>
+  </ul>
+  <h3>Triangle calculator + bell curve</h3>
+  <div class="card">
+    <div class="ctrls">
+      <label>Avg win %<output id="twO"></output><input type="range" id="twR" min="2" max="40" value="15"></label>
+      <label>Avg loss %<output id="tlO"></output><input type="range" id="tlR" min="2" max="20" value="6"></label>
+      <label>Batting avg %<output id="tbO"></output><input type="range" id="tbR" min="20" max="80" value="45"></label>
+    </div>
+    <div class="stat" id="s4stat"></div>
+    <div id="s4hist"></div>
+  </div>
+</section>
+
+<!-- S5 -->
+<section class="ch" id="s5" data-t="5 · Compound" style="--c:var(--up)">
+  <div class="chno"><b>5</b>Section 5</div>
+  <h2>Paisa compound karo, galtiyaan nahi</h2>
+  <p class="lead">Chhote, consistent wins compound hote hain. Ek bada uncut loss mahino ki mehnat kha jaata hai. Lambi umar hi asli edge hai.</p>
+  <ul class="rules">
+    <li data-n="1"><b>Achhe size ka gain kabhi loss mein na badle.</b> Ye rule akela kaafi account bacha leta hai.</li>
+    <li data-n="2"><b>Chhoti success se badi success:</b> pehle chhote wins se confidence aur capital banao, phir size.</li>
+    <li data-n="3"><b>Audible mat bajao:</b> trade ke beech mein plan badalna (stop neeche khiskana, "thoda aur ruk jaata hoon") sabse mehenga kaam hai.</li>
+    <li data-n="4"><b>Earnings ke through hold?</b> Tabhi jab achha profit cushion ho. Cushion nahi to size kam karo ya bahar raho.</li>
+    <li data-n="5"><b>Apne drum par chalo:</b> TV, tips, social media ka shor band. Tumhara process hi tumhara signal hai.</li>
+    <li data-n="6"><b>Sit-out power:</b> market kharab hai to cash bhi ek position hai. Luck Vegas ke liye hai; trading mein taiyari.</li>
+  </ul>
+  <h3>Same wins, alag loss discipline</h3>
+  <div class="card">
+    <div class="ctrls">
+      <label>Har kitne trade mein ek loss "chhod diya"<output id="cfO"></output><input type="range" id="cfR" min="4" max="20" value="8"></label>
+      <label>Us chhode hue loss ka size %<output id="csO"></output><input type="range" id="csR" min="15" max="50" value="30"></label>
+    </div>
+    <div id="s5eq"></div>
+    <div class="stat" id="s5stat"></div>
+  </div>
+</section>
+
+<!-- S6 -->
+<section class="ch" id="s6" data-t="6 · Buy (1)" style="--c:var(--teal)">
+  <div class="chno"><b>6</b>Section 6</div>
+  <h2>Kab aur kaise kharidein — Part 1</h2>
+  <p class="lead">Chart fundamentals ko jhutla nahi sakta — institutions ke footprints wahin dikhte hain. Sirf Stage 2 stock, Trend Template pass, aur VCP ke tight pivot par entry.</p>
+  <ul class="rules">
+    <li data-n="1"><b>Stage 2 only.</b> Stage 1 (neend), 3 (top banna), 4 (girna) mein long nahi.</li>
+    <li data-n="2"><b>Trend Template ke 8 criteria</b> — neeche checker mein daal ke dekho. Ek bhi fail to candidate nahi.</li>
+    <li data-n="3"><b>VCP:</b> 2 se 6 contractions, har ek pichhle se chhota; right side par price tight aur volume sookha. Geele towel ko baar-baar nichodne jaisa — har baar kam paani (supply) nikalta hai.</li>
+    <li data-n="4"><b>Footprint likho:</b> jaise "10W 25/6 3T" = 10 hafte ka base, pehla pullback 25%, aakhri 6%, 3 contractions.</li>
+    <li data-n="5"><b>Overhead supply:</b> purane high ke paas phase hue buyers breakeven par bechenge. Base us supply ko khaa le tab tak ruko.</li>
+    <li data-n="6"><b>Pivot = call to action.</b> Pivot ke upar trigger, kuch % se zyada chase nahi. Pivot par volume badhe, tight area mein volume sookhe.</li>
+    <li data-n="7"><b>Serial gapper se bacho:</b> jo stock baar-baar gap-up/gap-down karta hai, uska stop tight nahi baithta.</li>
+  </ul>
+  <h3>Trend Template checker</h3>
+  <div class="card">
+    <div class="ctrls">
+      <label>Price ₹<input type="number" id="tp" value="1250"></label>
+      <label>50-DMA<input type="number" id="t50" value="1180"></label>
+      <label>150-DMA<input type="number" id="t150" value="1050"></label>
+      <label>200-DMA<input type="number" id="t200" value="990"></label>
+      <label>200-DMA 1 mahina pehle<input type="number" id="t200p" value="960"></label>
+      <label>52-week low<input type="number" id="tlo" value="720"></label>
+      <label>52-week high<input type="number" id="thi" value="1310"></label>
+      <label>RS rating (1-99)<input type="number" id="trs" value="88"></label>
+    </div>
+    <div class="tt" id="ttOut"></div>
+  </div>
+  <h3>Chart: stock ki life ke 4 stages</h3>
+  <div class="card"><div id="s6stage"></div></div>
+  <h3>Chart: VCP step-by-step</h3>
+  <div class="card"><div id="s6vcp"></div></div>
+</section>
+
+<!-- S7 -->
+<section class="ch" id="s7" data-t="7 · Buy (2)" style="--c:var(--blue)">
+  <div class="chno"><b>7</b>Section 7</div>
+  <h2>Kab aur kaise kharidein — Part 2</h2>
+  <p class="lead">Bade winners new high banate hain, aur asli leaders market ke bottom ke saath (ya pehle) uth jaate hain. Correction ke baad jo sabse pehle naya high banaye, watchlist mein woh sabse upar.</p>
+  <ul class="rules">
+    <li data-n="1"><b>New highs se mat daro.</b> Sasta dikhne wala stock aksar sasta hi rehta hai.</li>
+    <li data-n="2"><b>Leaders bottom first:</b> market jab bottom bana raha ho, jo stocks index se pehle relative strength dikhayein unhe pakdo.</li>
+    <li data-n="3"><b>3-C (cup completion cheat):</b> cup ke lower ya middle third mein chhota tight pause, volume sookha. Pause ke high ke upar "turn" — sabse early entry, aksar partial size.</li>
+    <li data-n="4"><b>Double bottom:</b> dusra low pehle ko thoda undercut kare (weak holders ka shakeout), phir beech wale peak ke upar pivot.</li>
+    <li data-n="5"><b>Power play (high tight flag):</b> ~8 hafte mein 100%+ ki tezi, phir 3–6 hafte ka sideways flag jo ~20–25% se zyada na gire. Fundamentals na bhi hon to chalta hai, VCP wali tightness chahiye.</li>
+    <li data-n="6"><b>Lockout rally:</b> kuch leaders bina pullback diye chalte rehte hain aur tum "lock out" ho jaate ho — chhoti starter position se andar aana behtar.</li>
+  </ul>
+  <h3>Pattern gallery</h3>
+  <div class="card"><div class="tabs" id="s7tabs"></div><div id="s7chart"></div></div>
+</section>
+
+<!-- S8 -->
+<section class="ch" id="s8" data-t="8 · Position size" style="--c:var(--amber)">
+  <div class="chno"><b>8</b>Section 8</div>
+  <h2>Position sizing</h2>
+  <p class="lead">Size hi decide karta hai ki galat hone par kitna dard hoga. Pehle per-trade risk fix karo, phir stop, phir shares — ulta nahi.</p>
+  <ul class="rules">
+    <li data-n="1"><b>Per trade risk:</b> total equity ka 1.25–2.5%.</li>
+    <li data-n="2"><b>Stop max 10%,</b> aur losses ka average 5–6% ke aas-paas.</li>
+    <li data-n="3"><b>Koi position 50% se badi nahi.</b> Best names mein 20–25% optimal.</li>
+    <li data-n="4"><b>Kitne stocks:</b> aam taur par 4–8, bade account mein 10–12 tak. 20 se zyada ki zaroorat nahi.</li>
+    <li data-n="5"><b>Chhote se shuru:</b> 5–10% se start, stock prove kare to badhao.</li>
+    <li data-n="6"><b>Two-for-one rule:</b> do kamzor stocks ko aadha karo, us paise se ek naye strong stock ki poori position.</li>
+    <li data-n="7"><b>Leaders jaldi mat becho,</b> khaas kar naye bull market mein. Kabhi-kabhi best buy woh hai jo already tumhare paas hai.</li>
+  </ul>
+  <h3>Position size calculator</h3>
+  <div class="card">
+    <div class="ctrls">
+      <label>Total capital ₹<input type="number" id="zc" value="1000000"></label>
+      <label>Risk per trade %<input type="number" id="zr" value="1.25" step=".25"></label>
+      <label>Entry ₹<input type="number" id="ze" value="850"></label>
+      <label>Stop ₹<input type="number" id="zs" value="800"></label>
+    </div>
+    <div class="stat" id="zout"></div>
+    <div id="zwarn" class="hand"></div>
+  </div>
+  <h3>Two-for-one, visually</h3>
+  <div class="card">
+    <small class="hand" style="color:var(--mute)">Pehle: 5 stocks × 20%. D aur E kamzor.</small>
+    <div class="alloc" id="al1"></div>
+    <small class="hand" style="color:var(--mute)">Baad mein: D aur E aadhe, us 20% se naya F.</small>
+    <div class="alloc" id="al2"></div>
+  </div>
+</section>
+
+<!-- S9 -->
+<section class="ch" id="s9" data-t="9 · Sell" style="--c:var(--dn)">
+  <div class="chno"><b>9</b>Section 9</div>
+  <h2>Kab bechein aur profit pakka karein</h2>
+  <p class="lead">Kharidna science hai, bechna art. Pehle dekho stock apni life ke kis stage mein hai (base count), phir strength ya weakness ke specific signals.</p>
+  <ul class="rules">
+    <li data-n="1"><b>Base count:</b> 1st–2nd base early (room do), 3rd par dhyan, 4th–5th late stage — strength mein bechne ka mood.</li>
+    <li data-n="2"><b>Climax signs:</b> 1–3 hafte mein 25–50%+ tezi; 7–15 din mein 70%+ up days; move ka sabse bada up day; sabse chauda daily range; exhaustion gap; P/E ka double hona.</li>
+    <li data-n="3"><b>Weakness mein becho:</b> Stage 2 shuru hone ke baad ka sabse bada down day/week, heavy volume par — lagbhag pakka sell. Achhi news ke din bhi.</li>
+    <li data-n="4"><b>Breakeven-or-better:</b> 50-DMA upar chadhkar tumhare entry price tak aa jaaye, to wahi tumhara trailing stop.</li>
+    <li data-n="5"><b>Free roll:</b> stock 2–3R upar — aadha becho, baaki par stop breakeven. Ab worst case bhi profit.</li>
+    <li data-n="6"><b>Back stop:</b> trailing nahi, ek "line in sand" jiske neeche profit nahi jaane doge — aksar apne average gain ke upar.</li>
+    <li data-n="7"><b>Hamesha thoda jaldi ya thoda der se bechoge.</b> Perfect top ka intezaar mat karo; jaldi bechna der se behtar.</li>
+  </ul>
+  <h3>Sell charts</h3>
+  <div class="card"><div class="tabs" id="s9tabs"></div><div id="s9chart"></div></div>
+  <h3>Free roll calculator</h3>
+  <div class="card">
+    <div class="ctrls">
+      <label>Entry ₹<input type="number" id="fe" value="400"></label>
+      <label>Stop %<input type="number" id="fs" value="7"></label>
+      <label>Qty<input type="number" id="fq" value="200"></label>
+      <label>Current price ₹<input type="number" id="fp" value="460"></label>
+    </div>
+    <div class="stat" id="fout"></div>
+  </div>
+</section>
+
+<!-- S10 -->
+<section class="ch" id="s10" data-t="10 · 8 keys" style="--c:var(--pink)">
+  <div class="chno"><b>10</b>Section 10</div>
+  <h2>Superperformance ki 8 chaabiyaan</h2>
+  <p class="lead">Chaar chaabiyaan upside kholti hain, chaar drawdown chhota rakhti hain. Dono chahiye — +50%, +50%, phir −50% ka matlab teen saal mein sirf ~4% saalana.</p>
+  <h3>Bade returns ke liye</h3>
+  <div class="keys" style="--kc:var(--up)">
+    <div style="--kc:var(--up)"><b>1 · Timing</b>Market time ho sakta hai — tayyari ho to "sahi waqt, sahi jagah" pakda jaata hai. Aadhi baar galat hoge; farq size aur exit se padta hai.</div>
+    <div style="--kc:var(--up)"><b>2 · Diversify mat karo</b>Edge hai to diversification use patla karti hai. 4–12 best names, zyada paisa top 4–5 mein.</div>
+    <div style="--kc:var(--up)"><b>3 · Turnover taboo nahi</b>Jaldi-jaldi compounding ke liye aage badhna theek hai, agar stock ruk gaya ho.</div>
+    <div style="--kc:var(--up)"><b>4 · Risk/reward hamesha</b>Losses short-term, gains relatively long-term. Concentration ka risk isi balance se control hota hai.</div>
+  </div>
+  <h3>Drawdown chhota rakhne ke liye</h3>
+  <div class="keys">
+    <div style="--kc:var(--dn)"><b>1 · Strength mein becho</b>Jab buyers utavle hon tab becho. Pro strength mein bechta hai, amateur lalach mein rukta hai.</div>
+    <div style="--kc:var(--dn)"><b>2 · Pehle chhota, phir bada</b>Recent trades profit mein na hon to size mat badhao. Teen trader traps: galat time par bada size, loss ke baad revenge, win ke baad over-confidence.</div>
+    <div style="--kc:var(--dn)"><b>3 · Trend ke saath</b>Tight stops ke saath trend ke khilaaf trade = chhote losses ki line.</div>
+    <div style="--kc:var(--dn)"><b>4 · Breakeven bachao</b>Achha gain ho gaya to principal protect. Market mushkil ho to stop jaldi upar.</div>
+  </div>
+  <h3>Drawdown ka math</h3>
+  <div class="card">
+    <div class="ctrls">
+      <label>Saal 1 %<output id="d1O"></output><input type="range" id="d1" min="-60" max="100" value="50"></label>
+      <label>Saal 2 %<output id="d2O"></output><input type="range" id="d2" min="-60" max="100" value="50"></label>
+      <label>Saal 3 %<output id="d3O"></output><input type="range" id="d3" min="-60" max="100" value="-50"></label>
+    </div>
+    <div id="s10bar"></div>
+    <div class="stat" id="s10stat"></div>
+  </div>
+</section>
+
+<!-- S11 -->
+<section class="ch" id="s11" data-t="11 · Mindset" style="--c:var(--teal)">
+  <div class="chno"><b>11</b>Section 11</div>
+  <h2>Champion trader ka mindset</h2>
+  <p class="lead">Aakhri section coach Jairek Robbins ke saath baatcheet hai. Saar: strategy tabhi chalti hai jab dimaag uske saath ho.</p>
+  <ul class="rules">
+    <li data-n="1"><b>Chhota loss = achhi feeling.</b> Rule follow hua. Dard bade loss ka hona chahiye, chhote ka nahi.</li>
+    <li data-n="2"><b>Ek style par tike raho.</b> Zyaadatar traders har kuch mahine strategy badalte hain; mastery wahi karta hai jo dabble nahi karta.</li>
+    <li data-n="3"><b>Achhe sawaal poocho:</b> "Main hi kyun?" ki jagah "Is trade se kya seekha?" — sawaal ki quality jawab ki quality banati hai.</li>
+    <li data-n="4"><b>Losing streak ke baad:</b> size chhota, process par focus, confidence dheere se wapas.</li>
+    <li data-n="5"><b>Shor band:</b> 24×7 news aur social media focus kha jaate hain.</li>
+    <li data-n="6"><b>Sahi mentor:</b> jiske results aur process dono tum dekh sako, aur jo tumse sach bole.</li>
+    <li data-n="7"><b>Samay do:</b> skill banne mein saal lagte hain. Chhoti size par seekhna sasta hai.</li>
+  </ul>
+</section>
+
+</main>
+<footer class="wrap">Study notes Hinglish mein, book padhne ke saath use karne ke liye. Sab charts synthetic data se bane hain. Trading mein risk hai — koi bhi number personal advice nahi.</footer></div>`;
+function pbBoot(root){
+
+/* ================= engine ================= */
+const NS='http://www.w3.org/2000/svg';
+const COL={ink:'#1B2A35',mute:'#5A6B75',amber:'#B86E00',teal:'#0E7F74',up:'#1E7A4C',dn:'#B3322B',blue:'#2F5FD0',pink:'#A8367F',grid:'#D6E0DB'};
+const HAND="Archivo, system-ui, sans-serif";
+const $=id=>root.getElementById(id);
+function el(t,a,p){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e}
+function tx(p,x,y,s,o={}){const e=el('text',Object.assign({x,y,fill:COL.ink,'font-family':HAND,'font-size':15},o),p);e.textContent=s;return e}
+function rng(seed){let s=seed;return()=>{s=(s*16807)%2147483647;return(s-1)/2147483646}}
+function seg(arr,i,d){for(const[u,v] of arr)if(i<=u)return v;return d}
+function gen({N,kp,vol=[],vm=[],seed=5,ov={}}){
+  const r=rng(seed);
+  const base=i=>{for(let k=0;k<kp.length-1;k++){const[a,pa]=kp[k],[b,pb]=kp[k+1];if(i>=a&&i<=b){const t=(i-a)/(b-a),e=(1-Math.cos(Math.PI*t))/2;return pa+(pb-pa)*e}}return kp[kp.length-1][1]};
+  const D=[];let pc=base(0);
+  for(let i=0;i<N;i++){const v=seg(vol,i,.015),b=base(i);
+    let c=b*(1+(r()-.5)*v*1.2),o=pc*(1+(r()-.5)*v*.4);
+    let h=Math.max(o,c)*(1+r()*v*.7),l=Math.min(o,c)*(1-r()*v*.7);
+    const d={o,h,l,c};if(ov[i])Object.assign(d,ov[i]);
+    d.v=(.7+r()*.6)*seg(vm,i,1)*(d.c>=d.o?1.15:.9);if(ov[i]&&ov[i].vm)d.v=ov[i].vm;
+    D.push(d);pc=d.c}
+  return D}
+function ma(D,p){return D.map((_,i)=>i<p-1?null:D.slice(i-p+1,i+1).reduce((s,d)=>s+d.c,0)/p)}
+function niceTicks(lo,hi,n=4){const st=Math.pow(10,Math.floor(Math.log10((hi-lo)/n)));const m=[1,2,2.5,5,10].find(m=>(hi-lo)/(st*m)<=n)*st;const out=[];for(let v=Math.ceil(lo/m)*m;v<=hi;v+=m)out.push(+v.toFixed(6));return out}
+
+/* candle chart with step-through annotations */
+function candleChart(host,cfg){
+  host.innerHTML='';
+  const W=1000,H=cfg.h||430,L=8,R=64,T=16,PB=H-104,VT=H-88,VB=H-22;
+  const D=cfg.D,N=D.length;
+  let lo=Math.min(...D.map(d=>d.l)),hi=Math.max(...D.map(d=>d.h));const pd=(hi-lo)*.14;lo-=pd;hi+=pd*2.3;
+  const bw=(W-L-R)/N,X=i=>L+i*bw+bw/2,Y=p=>PB-(p-lo)/(hi-lo)*(PB-T);
+  const vmax=Math.max(...D.map(d=>d.v)),VY=v=>VB-v/vmax*(VB-VT);
+  const wrap=document.createElement('div');wrap.className='chart';host.appendChild(wrap);
+  const svg=el('svg',{viewBox:`0 0 ${W} ${H}`,role:'img','aria-label':cfg.label||'Illustrative candlestick chart'},wrap);
+  const tip=document.createElement('div');tip.className='tip';tip.textContent='Candle par hover/tap karo';wrap.appendChild(tip);
+  niceTicks(lo,hi).forEach(p=>{el('line',{x1:L,x2:W-R,y1:Y(p),y2:Y(p),stroke:COL.grid,'stroke-dasharray':'2 6'},svg);tx(svg,W-R+8,Y(p)+5,'₹'+p,{fill:COL.mute,'font-size':13})});
+  el('line',{x1:L,x2:W-R,y1:VB,y2:VB,stroke:COL.grid},svg);
+  const under=el('g',{},svg);
+  D.forEach((d,i)=>el('rect',{x:X(i)-bw*.36,y:VY(d.v),width:bw*.72,height:VB-VY(d.v),fill:d.c>=d.o?COL.up:COL.dn,opacity:.6},svg));
+  const mas=cfg.mas||[[20,COL.amber],[50,COL.teal]];const M={};
+  mas.forEach(([p,col])=>{const a=ma(D,p);M[p]=a;let s='';a.forEach((v,i)=>{if(v!=null)s+=(s?'L':'M')+X(i).toFixed(1)+','+Y(v).toFixed(1)});el('path',{d:s,fill:'none',stroke:col,'stroke-width':1.8},svg)});
+  D.forEach((d,i)=>{const col=d.c>=d.o?COL.up:COL.dn,x=X(i);
+    el('line',{x1:x,x2:x,y1:Y(d.h),y2:Y(d.l),stroke:col,'stroke-width':1},svg);
+    const yt=Y(Math.max(d.o,d.c)),yb=Y(Math.min(d.o,d.c));
+    el('rect',{x:x-bw*.34,y:yt,width:bw*.68,height:Math.max(1.2,yb-yt),fill:col},svg)});
+  let lx=L+6;mas.forEach(([p,col])=>{el('line',{x1:lx,x2:lx+18,y1:PB+14,y2:PB+14,stroke:col,'stroke-width':2},svg);tx(svg,lx+22,PB+18,p+'-DMA',{fill:COL.mute,'font-size':12});lx+=80});
+  tx(svg,W-R-50,VT+2,'volume',{fill:COL.mute,'font-size':12});
+  const groups=[];
+  const ctx={svg,under,X,Y,VY,D,M,bw,PB,T,VT,VB,W,R,L};
+  (cfg.ann||[]).forEach(a=>{const g=el('g',{},a.t==='z'||a.t==='vz'?under:svg);drawAnn(g,a,ctx);groups.push([g,a.step])});
+  const narrate=wrapNarr(host,cfg,groups);
+  // hover
+  const ov=el('rect',{x:L,y:T,width:W-L-R,height:VB-T,fill:'transparent'},svg);
+  const cross=el('line',{y1:T,y2:VB,stroke:COL.mute,'stroke-width':1,'stroke-dasharray':'3 3',opacity:0},svg);
+  const av=i=>{const s=D.slice(Math.max(0,i-20),i);return s.length?s.reduce((a,d)=>a+d.v,0)/s.length:D[i].v};
+  function mv(ev){const pt=svg.createSVGPoint();const e=ev.touches?ev.touches[0]:ev;pt.x=e.clientX;pt.y=e.clientY;const p=pt.matrixTransform(svg.getScreenCTM().inverse());
+    const i=Math.max(0,Math.min(N-1,Math.floor((p.x-L)/bw)));const d=D[i];cross.setAttribute('x1',X(i));cross.setAttribute('x2',X(i));cross.setAttribute('opacity',.7);
+    const ch=i?((d.c/D[i-1].c-1)*100).toFixed(1):'0.0';
+    tip.innerHTML=`Din ${i+1} · O ${d.o.toFixed(0)} H ${d.h.toFixed(0)} L ${d.l.toFixed(0)} C <b style="color:${d.c>=d.o?COL.up:COL.dn}">${d.c.toFixed(0)}</b> (${ch}%) · Vol ${(d.v/av(i)).toFixed(1)}× avg`+(cfg.dnote&&cfg.dnote[i]?`<br><span style="color:${COL.amber}">${cfg.dnote[i]}</span>`:'')}
+  ov.addEventListener('mousemove',mv);ov.addEventListener('touchstart',mv,{passive:true});ov.addEventListener('touchmove',mv,{passive:true});
+  ov.addEventListener('mouseleave',()=>cross.setAttribute('opacity',0));
+  return ctx}
+
+function drawAnn(g,a,c){const col=a.col||COL.amber,{X,Y,D}=c;
+  if(a.t==='h'){const x1=X(a.a),x2=X(a.b);el('line',{x1,x2,y1:Y(a.p),y2:Y(a.p),stroke:col,'stroke-width':2,'stroke-dasharray':a.dash||'8 5'},g);if(a.label)tx(g,a.lx!=null?X(a.lx):x1,Y(a.p)+(a.below?18:-7),a.label,{fill:col,'font-size':14,'font-weight':700})}
+  else if(a.t==='m'){const d=D[a.i],x=X(a.i);if(a.up!==false){const y=Y(d.l)+8;el('path',{d:`M${x},${y+24} L${x},${y+3} M${x-5},${y+9} L${x},${y+2} L${x+5},${y+9}`,stroke:col,'stroke-width':2.4,fill:'none','stroke-linecap':'round'},g);tx(g,x,y+42,a.label,{fill:col,'font-size':14,'font-weight':700,'text-anchor':'middle'})}
+    else{const y=Y(d.h)-8;el('path',{d:`M${x},${y-24} L${x},${y-3} M${x-5},${y-9} L${x},${y-2} L${x+5},${y-9}`,stroke:col,'stroke-width':2.4,fill:'none','stroke-linecap':'round'},g);tx(g,x,y-30,a.label,{fill:col,'font-size':14,'font-weight':700,'text-anchor':'middle'})}}
+  else if(a.t==='z'){el('rect',{x:X(a.a)-c.bw/2,y:c.T,width:X(a.b)-X(a.a)+c.bw,height:c.PB-c.T,fill:col,opacity:.1},g);if(a.label)tx(g,X(a.a),a.bottom?c.PB-8:c.T+16,a.label,{fill:col,'font-size':14,'font-weight':700})}
+  else if(a.t==='vz'){el('rect',{x:X(a.a)-c.bw/2,y:c.VT,width:X(a.b)-X(a.a)+c.bw,height:c.VB-c.VT,fill:col,opacity:.14},g);if(a.label)tx(g,X(a.a),c.VT+14,a.label,{fill:col,'font-size':13,'font-weight':700})}
+  else if(a.t==='p'){el('path',{d:a.pts.map((q,k)=>(k?'L':'M')+X(q[0])+','+Y(q[1])).join(''),fill:'none',stroke:col,'stroke-width':1.8,'stroke-dasharray':a.dash||'6 5'},g)}
+  else if(a.t==='t'){tx(g,X(a.i),Y(a.p),a.s,{fill:col,'font-size':a.fs||14,'font-weight':700,'text-anchor':a.anchor||'middle'})}
+  else if(a.t==='c'){el('ellipse',{cx:X(a.i),cy:Y(a.p),rx:a.rx||14,ry:a.ry||14,fill:'none',stroke:col,'stroke-width':2},g)}
+  else if(a.t==='vm'){const d=D[a.i];tx(g,X(a.i),c.VY(d.v)-6,a.label,{fill:col,'font-size':13,'font-weight':700,'text-anchor':'middle'})}
+}
+function wrapNarr(host,cfg,groups){
+  if(!cfg.steps){return}
+  const bar=document.createElement('div');bar.className='stepbar';host.appendChild(bar);
+  const narr=document.createElement('div');narr.className='narr';narr.setAttribute('aria-live','polite');host.appendChild(narr);
+  const prev=document.createElement('button');prev.textContent='◀';prev.setAttribute('aria-label','Pichhla step');
+  const next=document.createElement('button');next.textContent='▶';next.setAttribute('aria-label','Agla step');
+  const dots=document.createElement('div');dots.className='dots';
+  bar.append(prev,dots,next);
+  const all=[{t:'Poori kahani',n:cfg.intro||'Step dabao — har decision chart par highlight hoga.'},...cfg.steps];
+  const btns=all.map((s,k)=>{const b=document.createElement('button');b.textContent=k?k:'Sab';b.onclick=()=>show(k);dots.appendChild(b);return b});
+  let cur=0;
+  function show(k){cur=(k+all.length)%all.length;btns.forEach((b,j)=>b.classList.toggle('on',j===cur));
+    groups.forEach(([g,s])=>g.style.opacity=(cur===0||s==null||s===cur)?1:.12);
+    narr.innerHTML=`<b>${cur?cur+'. ':''}${all[cur].t}</b>${all[cur].n}`}
+  prev.onclick=()=>show(cur-1);next.onclick=()=>show(cur+1);show(0)}
+
+/* line chart */
+function lineChart(host,cfg){
+  host.innerHTML='';const W=1000,H=cfg.h||340,L=64,R=24,T=20,B=H-44;
+  const xs=cfg.xs;const all=cfg.ser.flatMap(s=>s.ys.filter(v=>v!=null));
+  let lo=cfg.ymin??Math.min(...all),hi=cfg.ymax??Math.max(...all);const pd=(hi-lo)*.08;if(cfg.ymin==null)lo-=pd;hi+=pd;
+  const x0=xs[0],x1=xs[xs.length-1],X=x=>L+(x-x0)/(x1-x0)*(W-L-R),Y=y=>B-(y-lo)/(hi-lo)*(B-T);
+  const wrap=document.createElement('div');wrap.className='chart';host.appendChild(wrap);
+  const svg=el('svg',{viewBox:`0 0 ${W} ${H}`,role:'img','aria-label':cfg.label||'Line chart'},wrap);
+  niceTicks(lo,hi).forEach(v=>{el('line',{x1:L,x2:W-R,y1:Y(v),y2:Y(v),stroke:COL.grid,'stroke-dasharray':'2 6'},svg);tx(svg,L-8,Y(v)+5,(cfg.yf||(v=>v))(v),{fill:COL.mute,'font-size':13,'text-anchor':'end'})});
+  niceTicks(x0,x1,8).forEach(v=>tx(svg,X(v),B+20,(cfg.xf||(v=>v))(v),{fill:COL.mute,'font-size':13,'text-anchor':'middle'}));
+  if(cfg.xl)tx(svg,W-R,H-4,cfg.xl,{fill:COL.mute,'font-size':13,'text-anchor':'end'});
+  if(cfg.zones)cfg.zones.forEach(z=>{el('rect',{x:X(z.a),y:T,width:X(z.b)-X(z.a),height:B-T,fill:z.col,opacity:.1},svg);tx(svg,(X(z.a)+X(z.b))/2,T+18,z.label,{fill:z.col,'font-size':15,'font-weight':700,'text-anchor':'middle'})});
+  if(cfg.hl)cfg.hl.forEach(h=>{el('line',{x1:L,x2:W-R,y1:Y(h.y),y2:Y(h.y),stroke:h.col,'stroke-width':1.6,'stroke-dasharray':'7 5'},svg);if(h.label)tx(svg,h.x!=null?X(h.x):L+6,Y(h.y)+(h.below?18:-6),h.label,{fill:h.col,'font-size':13,'font-weight':700,'text-anchor':'start'})});
+  cfg.ser.forEach(s=>{let d='';s.ys.forEach((y,k)=>{if(y!=null)d+=(d?'L':'M')+X(xs[k]).toFixed(1)+','+Y(y).toFixed(1)});el('path',{d,fill:'none',stroke:s.col,'stroke-width':s.w||2.6,'stroke-dasharray':s.dash||''},svg)});
+  let ly=T+6;if(cfg.ser.length>1)cfg.ser.forEach(s=>{el('line',{x1:L+12,x2:L+32,y1:ly+8,y2:ly+8,stroke:s.col,'stroke-width':3},svg);tx(svg,L+38,ly+13,s.n,{fill:s.col,'font-size':14,'font-weight':700,'text-anchor':'start'});ly+=22});
+  (cfg.marks||[]).forEach(m=>{el('circle',{cx:X(m.x),cy:Y(m.y),r:6,fill:m.col,stroke:'#ffffff','stroke-width':2},svg);tx(svg,X(m.x)+(m.dx||10),Y(m.y)+(m.dy||-10),m.label,{fill:m.col,'font-size':15,'font-weight':700,'text-anchor':m.anchor||'start'})});
+  (cfg.labels||[]).forEach(m=>tx(svg,X(m.x),Y(m.y),m.s,{fill:m.col,'font-size':m.fs||14,'font-weight':700,'text-anchor':'middle'}));
+  return{X,Y,svg}}
+
+function barChart(host,cfg){host.innerHTML='';const W=1000,H=cfg.h||280,L=50,R=20,T=24,B=H-40;
+  const n=cfg.vals.length,lo=Math.min(0,...cfg.vals),hi=Math.max(...cfg.vals)*1.12||1,bw=(W-L-R)/n,Y=v=>B-(v-lo)/(hi-lo)*(B-T);
+  const wrap=document.createElement('div');wrap.className='chart';host.appendChild(wrap);
+  const svg=el('svg',{viewBox:`0 0 ${W} ${H}`,role:'img','aria-label':cfg.label||'Bar chart'},wrap);
+  el('line',{x1:L,x2:W-R,y1:Y(0),y2:Y(0),stroke:COL.mute},svg);
+  cfg.vals.forEach((v,k)=>{const x=L+k*bw;el('rect',{x:x+bw*.12,y:Math.min(Y(v),Y(0)),width:bw*.76,height:Math.abs(Y(v)-Y(0)),fill:cfg.cols[k],rx:3},svg);
+    if(cfg.top)tx(svg,x+bw/2,Math.min(Y(v),Y(0))-6,cfg.top[k],{fill:cfg.cols[k],'font-size':13,'font-weight':700,'text-anchor':'middle'});
+    if(cfg.xl&&(k%(cfg.every||1)===0))tx(svg,x+bw/2,B+20,cfg.xl[k],{fill:COL.mute,'font-size':12,'text-anchor':'middle'})});
+  if(cfg.note)tx(svg,W-R,T,cfg.note,{fill:COL.mute,'font-size':14,'text-anchor':'end'})}
+
+function tabs(tabHost,chartHost,items){tabHost.innerHTML='';const bs=items.map((it,k)=>{const b=document.createElement('button');b.textContent=it.name;b.onclick=()=>{bs.forEach(x=>x.classList.remove('on'));b.classList.add('on');it.draw(chartHost)};tabHost.appendChild(b);return b});bs[0].click()}
+const fmt=n=>'₹'+Math.round(n).toLocaleString('en-IN');
+const pct=(n,d=1)=>(n>=0?'+':'')+n.toFixed(d)+'%';
+function stats(host,arr){host.innerHTML=arr.map(([k,v,c])=>`<div><small>${k}</small><strong class="${c||''}">${v}</strong></div>`).join('')}
+function bindRange(id,o,f){const r=$(id),out=$(o);const u=()=>{out.textContent=f?f(+r.value):r.value};r.addEventListener('input',u);u();return r}
+
+/* ================= S1 ================= */
+function s1Healthy(h){
+  const D=gen({N:130,seed:21,kp:[[0,100],[30,112],[42,103],[55,110],[59,110.5],[60,116],[68,131],[75,124],[88,141],[100,150],[112,146],[129,170]],vol:[[29,.018],[45,.02],[59,.007],[129,.018]],vm:[[45,1.1],[59,.45],[62,2.6],[70,1.5],[129,1.1]],
+    ov:{60:{o:110.8,h:116.5,l:110.5,c:116,vm:2.9},61:{o:116,h:118.6,l:115.6,c:118.2},62:{o:118.2,h:120.4,l:117.5,c:120},63:{o:120,h:120.6,l:118.2,c:119},64:{o:119,h:122.8,l:118.8,c:122.5},65:{o:122.5,h:125.4,l:122,c:125},66:{o:125,h:127.6,l:124.6,c:127.4},67:{o:127.4,h:130,l:127,c:129.6}}});
+  const entry=116,stop=entry*.93;
+  candleChart(h,{D,label:'Healthy breakout with follow-through',
+    intro:'Ek healthy trade ki poori life: stop se shuru, breakeven par shift, phir profit protect. Candles par hover karke har din ka data dekho.',
+    ann:[{t:'h',p:111,a:44,b:60,col:COL.blue,label:'pivot',step:1},{t:'m',i:60,label:'BUY',col:COL.amber,step:1},{t:'h',p:stop,a:60,b:84,col:COL.dn,label:'(a) stop −7%',below:true,lx:66,step:1},
+      {t:'z',a:60,b:67,col:COL.up,label:'7/8 up days',step:2},{t:'vm',i:60,label:'vol 2.9×',col:COL.amber,step:2},
+      {t:'c',i:75,p:D[75].l,col:COL.blue,rx:22,ry:18,step:3},{t:'t',i:75,p:D[75].l*.965,s:'natural reaction',col:COL.blue,step:3},{t:'m',i:86,label:'naya high',col:COL.up,step:3},{t:'h',p:entry,a:86,b:129,col:COL.amber,label:'(b) stop → breakeven',below:true,lx:95,step:3},
+      {t:'h',p:136,a:104,b:129,col:COL.teal,label:'(c) back stop',step:4}],
+    steps:[{t:'Plan pehle: pivot, entry, stop',n:'Tight base ke pivot ke upar entry, 2.9× volume ke saath. Buy se pehle hi stop −7% par fix — priority (a): loss limit.'},
+      {t:'Follow-through count',n:'Breakout ke baad 8 mein 7 din up, closes upper half mein. Institutions ek din mein position nahi bhar paate — isliye stock "hard to buy" rehta hai. Trade plan ke hisaab se chal raha hai.'},
+      {t:'Reaction → naya high → breakeven',n:'Pehli natural pullback 20-DMA ke paas ruki, phir stock naye high par gaya. Ab priority (b): stop ko entry price par le aao. Worst case: kuch nahi gaya.'},
+      {t:'Profit protect karo',n:'Gain bada ho gaya — priority (c). Back stop ya trailing stop se decide karo ki is profit ka kitna hissa kabhi wapas nahi jaane doge.'}]})}
+function s1Fail(h){
+  const D=gen({N:100,seed:8,kp:[[0,100],[30,112],[42,104],[58,110],[59,110.5],[60,113],[70,101],[99,94]],vol:[[29,.018],[45,.02],[59,.007],[99,.02]],vm:[[45,1.1],[59,.55],[99,1.2]],
+    ov:{60:{o:110.6,h:113.6,l:110.4,c:113,vm:.9},61:{o:112.8,h:113.1,l:111.2,c:111.6,vm:1.9},62:{o:111.6,h:111.9,l:109.6,c:109.9,vm:2.2},63:{o:109.9,h:110.2,l:107.8,c:108.1,vm:2.5},64:{o:108,h:108.6,l:106.4,c:106.8,vm:2.1},65:{o:106.8,h:107.6,l:105.9,c:106.3,vm:1.6},66:{o:106.3,h:106.5,l:104.2,c:104.6,vm:2.4}}});
+  const stop=113*.93;
+  candleChart(h,{D,label:'Failed breakout with violations',intro:'Breakout jo kaam nahi kiya. Ek-ek violation judta gaya — plan ne bina emotion ke exit karwaya.',
+    ann:[{t:'m',i:60,label:'BUY',col:COL.amber,step:1},{t:'vm',i:60,label:'low vol',col:COL.dn,step:1},{t:'vz',a:61,b:66,col:COL.dn,label:'high vol wapas',step:2},
+      {t:'m',i:61,up:false,label:'LL1',col:COL.dn,step:3},{t:'m',i:62,up:false,label:'LL2',col:COL.dn,step:3},{t:'m',i:63,up:false,label:'LL3',col:COL.dn,step:3},
+      {t:'c',i:64,p:D[64].c,col:COL.amber,step:4},{t:'t',i:64,p:D[64].l*.975,s:'20-DMA ke neeche close',col:COL.amber,step:4},
+      {t:'h',p:stop,a:60,b:80,col:COL.dn,label:'stop −7% → EXIT',below:true,step:5}],
+    steps:[{t:'Low volume breakout',n:'Pivot toota lekin volume average se kam. Demand kamzor hai — pehla shaq.'},
+      {t:'Low volume out, high volume in',n:'Agle dino stock base mein wapas aaya, aur is baar volume bhaari. Jeetne wala ghoda gate mein ulta nahi aata. Bada red flag.'},
+      {t:'Teen lower lows, bina support',n:'Lagatar teen lower lows aur kisi din buyers ne close ko upper half mein nahi dhakela. Ek aur violation.'},
+      {t:'20-DMA ke neeche close',n:'Breakout ke jaldi baad 20-DMA ke neeche close — aise mein success ke chances kaafi gir jaate hain. Ab kai violations saath hain.'},
+      {t:'Stop hit = exit',n:'Stop pehle se tha, isliye koi bahas nahi. Chhota loss, capital aur confidence dono bache. Stock baad mein naya base banaye to reentry criteria se dobara dekh sakte ho.'}]})}
+function s1Squat(h){
+  const D=gen({N:110,seed:13,kp:[[0,100],[30,112],[42,104],[58,110],[59,110.5],[60,111],[63,109],[65,114],[80,128],[109,140]],vol:[[29,.018],[45,.02],[59,.007],[109,.018]],vm:[[45,1.1],[59,.5],[109,1.2]],
+    ov:{60:{o:110.6,h:114,l:110.3,c:110.9,vm:2.1},61:{o:110.9,h:111.4,l:109.4,c:109.8,vm:1.1},62:{o:109.8,h:110.6,l:108.9,c:110.2,vm:.8},63:{o:110.2,h:112.6,l:110,c:112.4,vm:1.3},64:{o:112.4,h:115.6,l:112.2,c:115.3,vm:2.2},65:{o:115.3,h:117.4,l:115,c:117.1,vm:1.8}}});
+  candleChart(h,{D,label:'Squat and reversal recovery',intro:'Breakout ke din squat, phir kuch din mein reversal recovery. Plan ne panic sell se bachaya.',
+    ann:[{t:'h',p:111,a:44,b:60,col:COL.blue,label:'pivot',step:1},{t:'m',i:60,up:false,label:'squat',col:COL.dn,step:1},{t:'z',a:61,b:63,col:COL.amber,label:'wait',step:2},{t:'h',p:111*.93,a:60,b:75,col:COL.dn,label:'stop (hit nahi hua)',below:true,step:2},{t:'m',i:64,label:'recovery',col:COL.up,step:3}],
+    steps:[{t:'Squat',n:'Pivot ke upar gaya, lekin din ke end tak range mein wapas aakar low ke paas close. Naya trader yahin ghabra ke bech deta hai.'},
+      {t:'Recovery ka mauka do',n:'Stop nahi toota aur market healthy hai, to kuch din (kabhi 10 tak) ruko. Ye rule nahi, accommodation hai — stop hi aakhri faisla karega.'},
+      {t:'Reversal recovery',n:'Stock ne squat day ka high paar kiya volume ke saath. Weak holders nikal chuke the — ab trade phir se plan ke hisaab se.'}]})}
+tabs($('s1tabs'),$('s1chart'),[{name:'Healthy trade',draw:s1Healthy},{name:'Failure signals',draw:s1Fail},{name:'Squat → recovery',draw:s1Squat}]);
+
+/* ================= S2 ================= */
+(function(){const lr=bindRange('lossR','lossO',v=>'−'+v+'%');
+  const draw=()=>{const L=+lr.value,g=L/(100-L)*100;const xs=[...Array(90)].map((_,k)=>k+1);
+    lineChart($('s2curve'),{xs,ser:[{n:'gain chahiye',ys:xs.map(x=>x/(100-x)*100),col:COL.dn}],ymax:900,ymin:0,xf:v=>'−'+v+'%',yf:v=>'+'+v+'%',xl:'loss',hl:[{y:11.1,col:COL.up,label:'−10% loss → +11% (manageable)',below:true,x:3}],
+      marks:[{x:L,y:Math.min(g,900),col:COL.amber,label:`−${L}% ke baad +${g.toFixed(0)}% chahiye`,dy:-22,anchor:L>60?'end':'start',dx:L>60?-12:10}],label:'Gain needed to recover from loss'})};
+  lr.addEventListener('input',draw);draw();
+  const br=bindRange('brR','brO',v=>v+'%');
+  const mk=(amp,seed)=>{const r=rng(seed);let p=100;return [...Array(80)].map((_,k)=>{p=100*(1+k*.006)+Math.sin(k/2.3)*amp*(.6+r()*.8)+(r()-.5)*amp;return p})};
+  const calm=mk(2.2,3),bron=mk(9,9);
+  const drawB=()=>{const s=+br.value,sl=100*(1-s/100);const hit=a=>{const k=a.findIndex(v=>v<sl);return k};
+    const hc=hit(calm),hb=hit(bron);const xs=[...Array(80)].map((_,k)=>k);
+    const marks=[];if(hc>=0)marks.push({x:hc,y:calm[hc],col:COL.teal,label:'stopped',dy:22});if(hb>=0)marks.push({x:hb,y:bron[hb],col:COL.dn,label:'stopped!',dy:22});
+    lineChart($('s2bronco'),{xs,ser:[{n:'Shaant stock',ys:calm,col:COL.teal},{n:'Bucking bronco',ys:bron,col:COL.dn,w:2}],hl:[{y:100,col:COL.mute,label:'entry ₹100'},{y:sl,col:COL.amber,label:`stop ₹${sl.toFixed(0)}`,below:true,x:20}],marks,xl:'din',yf:v=>'₹'+v,label:'Calm vs volatile stock with same stop'});
+    stats($('s2bstat'),[['Shaant stock',hc<0?'Trade zinda':'Din '+hc+' stop',hc<0?'good':'bad'],['Bronco',hb<0?'Trade zinda':'Din '+hb+' stop',hb<0?'good':'bad'],['Seekh','Dono upar gaye — bronco ne rasta mein phenk diya','warn']])};
+  br.addEventListener('input',drawB);drawB()})();
+
+/* ================= S3 ================= */
+(function(){const ba=bindRange('baR','baO',v=>v+'%'),rt=bindRange('rtR','rtO',v=>v+' : 1');
+  const draw=()=>{const p=+ba.value/100,r=+rt.value,w=Math.round(p*10),l=10-w;const xs=[...Array(60)].map((_,k)=>k+1);
+    const f=g=>(Math.pow(1+g/100,w)*Math.pow(1-g/r/100,l)-1)*100;const ys=xs.map(f);let bi=0;ys.forEach((y,k)=>{if(y>ys[bi])bi=k});
+    lineChart($('s3opt'),{xs,ser:[{n:'10 trades ka ROI',ys,col:COL.amber}],xf:v=>v+'%',yf:v=>v.toFixed(0)+'%',xl:`avg gain % (loss = gain ÷ ${r})`,hl:[{y:0,col:COL.mute}],
+      marks:[{x:xs[bi],y:ys[bi],col:COL.up,label:`best: +${xs[bi]}% / −${(xs[bi]/r).toFixed(1)}% → ${ys[bi].toFixed(1)}%`,anchor:bi>35?'end':'start',dx:bi>35?-12:10}],label:'ROI vs gain size at fixed ratio'});
+    stats($('s3stat'),[['10 trades mein',`${w} jeet, ${l} haar`],['Sweet spot gain',xs[bi]+'%','good'],['Usse door stop?','ROI girta hai','warn']])};
+  [ba,rt].forEach(x=>x.addEventListener('input',draw));draw();
+  const D=gen({N:120,seed:31,kp:[[0,100],[25,110],[38,103],[50,108],[52,109],[53,112],[62,126],[70,120],[80,134],[86,131],[88,137],[119,158]],vol:[[25,.018],[40,.02],[52,.007],[119,.017]],vm:[[40,1],[52,.5],[119,1.1]],
+    ov:{53:{o:109,h:112.6,l:108.8,c:112.2,vm:2.6},88:{o:132.5,h:137.8,l:132.2,c:137.4,vm:2.1}}});
+  const e=112,s=106.5,R=e-s;
+  candleChart($('s3chart'),{D,label:'Stop to breakeven at 3R and pyramid add',intro:'Risk R = entry − stop. Stock 3R upar aaye to stop breakeven; naye pivot par add karke size double, rupee risk same.',
+    ann:[{t:'m',i:53,label:'BUY 1',col:COL.amber,step:1},{t:'h',p:s,a:53,b:74,col:COL.dn,label:'stop (1R)',below:true,lx:58,step:1},
+      {t:'h',p:e+3*R,a:56,b:80,col:COL.up,label:'3R target',step:2},{t:'h',p:e,a:66,b:88,col:COL.amber,label:'stop → breakeven',below:true,lx:70,step:2},
+      {t:'m',i:88,label:'ADD (BUY 2)',col:COL.up,step:3},{t:'h',p:D[88].c-R,a:88,b:119,col:COL.dn,label:'dono ka naya stop',below:true,lx:98,step:3}],
+    steps:[{t:'1R define karo',n:`Entry ₹${e}, stop ₹${s}. Har share par risk R = ₹${R.toFixed(1)}. Isse hi baaki sab naapa jaayega.`},
+      {t:'3R aur average se upar → breakeven',n:'Price entry + 3R ke paas pahunchi aur gain tumhare average gain se zyada. Ab ye trade loss mein nahi jaane dena — stop entry par.'},
+      {t:'Add & Reduce',n:'Naye tight area se breakout par utni hi quantity aur add karo, aur poori position ka stop pehli buy ke thoda upar. Size double, lekin rupee risk pehle jitna ya zero — profit risk ko finance kar raha hai.'}]});
+  const py=()=>{const a1=+$('pa1').value,q=+$('pq').value,d=+$('pd').value,a2=+$('pa2').value;const r1=q*d,ns=a2-d,risk2=q*(a1-ns)+q*(a2-ns);
+    stats($('pyr'),[['Pehla risk',fmt(r1)],['Add ke baad qty',(2*q)+''],['Common stop',fmt(ns)],['Naya total risk',risk2<=0?'Zero (free)':fmt(risk2),risk2<=r1?'good':'bad']])};
+  ['pa1','pq','pd','pa2'].forEach(i=>$(i).addEventListener('input',py));py()})();
+
+/* ================= S4 ================= */
+(function(){const w=bindRange('twR','twO',v=>v+'%'),l=bindRange('tlR','tlO',v=>v+'%'),b=bindRange('tbR','tbO',v=>v+'%');
+  const draw=()=>{const W=+w.value,Lo=+l.value,B=+b.value/100;const ex=B*W-(1-B)*Lo,be=Lo/(W+Lo)*100;
+    stats($('s4stat'),[['Expectancy / trade',pct(ex,2),ex>0?'good':'bad'],['Breakeven batting',be.toFixed(0)+'%'],['Win/loss ratio',(W/Lo).toFixed(2)+' : 1',W/Lo>=2?'good':'warn']]);
+    const r=rng(77),bins=[...Array(22)].map((_,k)=>-20+k*4),cnt=bins.map(()=>0);
+    for(let k=0;k<200;k++){let v;if(r()<B){v=W*(-Math.log(1-r()*.95))}else{v=-Lo*(.4+r()*1.2)}v=Math.max(-20,Math.min(67,v));cnt[Math.min(21,Math.floor((v+20)/4))]++}
+    barChart($('s4hist'),{vals:cnt,cols:bins.map(x=>x<0?COL.dn:COL.up),xl:bins.map(x=>(x>0?'+':'')+x+'%'),every:2,note:'200 simulated trades — left side tight, right tail lamba',label:'Trade outcome distribution'})};
+  [w,l,b].forEach(x=>x.addEventListener('input',draw));draw()})();
+
+/* ================= S5 ================= */
+(function(){const f=bindRange('cfR','cfO',v=>v),s=bindRange('csR','csO',v=>'−'+v+'%');
+  const draw=()=>{const every=+f.value,big=+s.value;const r=rng(4);const seq=[...Array(60)].map(()=>r()<.5);
+    let a=100,bb=100;const A=[100],B=[100];let lossN=0;
+    seq.forEach((win,k)=>{if(win){a*=1.15;bb*=1.15}else{lossN++;a*=.93;bb*=(lossN%every===0)?1-big/100:.93}A.push(a);B.push(bb)});
+    const xs=A.map((_,k)=>k);
+    lineChart($('s5eq'),{xs,ser:[{n:'Har loss −7% par kata',ys:A,col:COL.up},{n:`Har ${every}th loss chhod diya (−${big}%)`,ys:B,col:COL.dn}],xl:'trade number',yf:v=>'₹'+v.toFixed(0)+'k',label:'Equity curves'});
+    stats($('s5stat'),[['Disciplined',pct(A[60]-100,0),'good'],['Kabhi-kabhi ki dheel',pct(B[60]-100,0),'bad'],['Farq',(A[60]/B[60]).toFixed(2)+'× zyada paisa','warn']])};
+  [f,s].forEach(x=>x.addEventListener('input',draw));draw()})();
+
+/* ================= S6 ================= */
+(function(){const ids=['tp','t50','t150','t200','t200p','tlo','thi','trs'];
+  const run=()=>{const[p,m50,m150,m200,m200p,lo,hi,rs]=ids.map(i=>+$(i).value);
+    const c=[[p>m150&&p>m200,'Price 150-DMA aur 200-DMA dono ke upar'],[m150>m200,'150-DMA, 200-DMA ke upar'],[m200>m200p,'200-DMA kam se kam 1 mahine se upar ja raha (4–5 mahine best)'],
+      [m50>m150&&m50>m200,'50-DMA, 150 aur 200 dono ke upar'],[p>=lo*1.25,`52-week low se 25%+ upar (abhi ${((p/lo-1)*100).toFixed(0)}%)`],[p>=hi*.75,`52-week high ke 25% ke andar (abhi ${((1-p/hi)*100).toFixed(0)}% neeche)`],
+      [rs>=70,'RS rating 70+ (90s best)'],[p>m50,'Price 50-DMA ke upar (base se nikalte waqt)']];
+    const n=c.filter(x=>x[0]).length;
+    $('ttOut').innerHTML=c.map(([ok,t])=>`<div><i class="${ok?'good':'bad'}">${ok?'✓':'✗'}</i>${t}</div>`).join('')+`<div style="background:${n===8?'#5ee39b33':'#ff6b7d33'}"><i>${n}/8</i><b>${n===8?'Stage 2 confirmed — candidate list mein daalo':'Fail — abhi candidate nahi'}</b></div>`};
+  ids.forEach(i=>$(i).addEventListener('input',run));run();
+  // stages
+  const r=rng(12);const kp=[[0,60],[20,50],[40,48],[70,52],[90,55],[140,120],[170,150],[200,160],[215,150],[230,158],[250,135],[300,80]];
+  const base=i=>{for(let k=0;k<kp.length-1;k++){const[a,pa]=kp[k],[b,pb]=kp[k+1];if(i>=a&&i<=b){const t=(i-a)/(b-a);return pa+(pb-pa)*(1-Math.cos(Math.PI*t))/2}}};
+  const xs=[...Array(301)].map((_,k)=>k),ys=xs.map(i=>base(i)*(1+(r()-.5)*.06)),m=xs.map(i=>i<39?null:ys.slice(i-39,i+1).reduce((a,b)=>a+b)/40);
+  lineChart($('s6stage'),{xs,ser:[{n:'Price (weekly)',ys,col:COL.ink,w:1.6},{n:'30-week MA',ys:m,col:COL.teal}],yf:v=>'₹'+v,xl:'hafte',
+    zones:[{a:0,b:85,col:COL.mute,label:'Stage 1 · neend'},{a:85,b:195,col:COL.up,label:'Stage 2 · YAHAN kharido'},{a:195,b:240,col:COL.amber,label:'Stage 3 · top'},{a:240,b:300,col:COL.dn,label:'Stage 4 · girna'}],label:'Stock life cycle stages'});
+  // VCP
+  const D=gen({N:120,seed:44,kp:[[0,100],[25,140],[32,148],[40,112],[52,138],[60,122],[70,137],[76,130],[84,139],[89,140],[90,145],[119,190]],vol:[[30,.018],[42,.03],[62,.02],[78,.012],[89,.006],[119,.02]],vm:[[30,1.2],[42,1.6],[62,1],[78,.7],[89,.38],[92,2.5],[119,1.2]],
+    ov:{90:{o:140.2,h:145.6,l:140,c:145.2,vm:3.2}}});
+  const hiA=(a,b)=>{let m=-1,k=a;for(let i=a;i<=b;i++)if(D[i].h>m){m=D[i].h;k=i}return[k,m]},loA=(a,b)=>{let m=1e9,k=a;for(let i=a;i<=b;i++)if(D[i].l<m){m=D[i].l;k=i}return[k,m]};
+  const H1=hiA(28,36),L1=loA(37,44),H2=hiA(48,56),L2=loA(57,64),H3=hiA(66,73),L3=loA(74,80),piv=Math.max(...D.slice(81,90).map(d=>d.h));
+  const dp=(h,l)=>Math.round((1-l[1]/h[1])*100),d1=dp(H1,L1),d2=dp(H2,L2),d3=dp(H3,L3),wk=Math.round((89-H1[0])/5);
+  candleChart($('s6vcp'),{D,label:'Volatility contraction pattern',intro:`Footprint: ${wk}W ${d1}/${d3} 3T — ${wk} hafte, pehla pullback ${d1}%, aakhri ${d3}%, teen contractions. Steps dabao.`,
+    ann:[{t:'p',pts:[[H1[0],H1[1]],[H2[0],H2[1]],[H3[0],H3[1]],[88,piv]],col:COL.blue,step:1},{t:'p',pts:[[L1[0],L1[1]],[L2[0],L2[1]],[L3[0],L3[1]]],col:COL.blue,step:1},
+      {t:'t',i:L1[0],p:L1[1]*.965,s:`T1 −${d1}%`,col:COL.blue,step:1},{t:'t',i:L2[0],p:L2[1]*.965,s:`T2 −${d2}%`,col:COL.blue,step:1},{t:'t',i:L3[0],p:L3[1]*.97,s:`T3 −${d3}%`,col:COL.blue,step:1},
+      {t:'vz',a:74,b:89,col:COL.blue,label:'dry-up',step:2},
+      {t:'h',p:piv,a:66,b:100,col:COL.amber,label:`pivot ₹${piv.toFixed(0)}`,step:3},{t:'m',i:90,label:'BUY',col:COL.amber,step:3},{t:'vm',i:90,label:'vol 3×+',col:COL.amber,step:3},
+      {t:'z',a:90,b:92,col:COL.dn,step:4},{t:'h',p:piv*1.05,a:90,b:104,col:COL.dn,label:'+5% se upar = chase mat',lx:94,step:4}],
+    steps:[{t:'Contractions: har baar chhota',n:`Pullbacks ${d1}% → ${d2}% → ${d3}%. Har baar kam girna matlab bechne wale khatam ho rahe hain — towel sookhta ja raha hai.`},
+      {t:'Volume dry-up',n:'Right side par volume bahut kam. Supply market mein aa hi nahi rahi. Ye sabse zaroori confirmation hai.'},
+      {t:'Pivot breakout',n:'Tight area ka high = pivot. Uske upar volume ke saath nikalna hi trigger hai. Stop aakhri contraction ke low ke neeche — isliye risk chhota.'},
+      {t:'Chase limit',n:'Pivot se kuch % se zyada upar bhaag gaya to skip. Door se kharida to stop bhi door — risk mein "back" kar rahe ho.'}]})})();
+
+/* ================= S7 ================= */
+function s7cheat(h){const D=gen({N:130,seed:52,kp:[[0,120],[20,150],[45,105],[60,98],[66,102],[72,103],[74,108],[95,130],[102,122],[110,133],[112,138],[129,160]],vol:[[20,.02],[60,.022],[72,.006],[129,.018]],vm:[[20,1.2],[60,1.3],[72,.45],[75,1.8],[129,1.1]],
+    ov:{73:{o:103.2,h:106.6,l:103,c:106.3,vm:2.2}}});
+  const ph=Math.max(...D.slice(64,73).map(d=>d.h));
+  candleChart(h,{D,label:'Cup completion cheat',intro:'Cup ke andar hi early entry. Pause tight ho aur volume sookha ho — tabhi.',
+    ann:[{t:'p',pts:[[20,150],[45,105],[60,98],[95,130],[110,133]],col:COL.blue,step:1},{t:'z',a:64,b:72,col:COL.amber,label:'pause',step:2},{t:'vz',a:64,b:72,col:COL.blue,label:'dry-up',step:2},
+      {t:'h',p:ph,a:62,b:86,col:COL.amber,label:'cheat pivot',step:3},{t:'m',i:73,label:'TURN · buy ½',col:COL.amber,step:3},{t:'m',i:112,label:'handle breakout · add',col:COL.up,step:4}],
+    steps:[{t:'Cup ban raha hai',n:'Stage 2 stock ka correction — neeche jaake gol mod. Abhi pata nahi low ho gaya ya nahi.'},
+      {t:'Lower/middle third mein pause',n:'Cup ke nichle ya beech wale hisse mein kuch din ka tight pause, volume sookha. Yahi cheat area.'},
+      {t:'The turn',n:'Pause ke high ke upar nikalna = stock ne shayad low bana liya aur bada uptrend wapas. Sabse early valid entry — aksar poori size nahi, partial.'},
+      {t:'Normal pivot par add',n:'Cup complete hokar handle se breakout — yahan baaki position. Average cost kam, kyunki pehla hissa neeche se liya.'}]})}
+function s7double(h){const D=gen({N:120,seed:61,kp:[[0,110],[18,140],[35,112],[48,130],[62,108],[66,111],[80,128],[86,124],[90,129],[92,134],[119,160]],vol:[[18,.02],[70,.022],[90,.01],[119,.018]],vm:[[18,1.2],[35,1.3],[62,1.6],[86,.7],[91,.5],[93,2.2],[119,1.1]],
+    ov:{62:{o:111,h:111.8,l:104.5,c:110.6,vm:2.4},92:{o:129.8,h:134.8,l:129.6,c:134.4,vm:2.8}}});
+  const l1=Math.min(...D.slice(30,40).map(d=>d.l)),mid=Math.max(...D.slice(42,54).map(d=>d.h));
+  candleChart(h,{D,label:'Double bottom with undercut',intro:'W shape — dusra low pehle ko todta hai, weak holders bahar, phir beech ke peak par pivot.',
+    ann:[{t:'h',p:l1,a:30,b:70,col:COL.blue,label:'pehla low',below:true,step:1},{t:'m',i:62,label:'undercut',col:COL.pink,step:2},{t:'h',p:mid,a:44,b:100,col:COL.amber,label:'middle peak = pivot',step:3},{t:'m',i:92,label:'BUY',col:COL.amber,step:3}],
+    steps:[{t:'Pehla low',n:'Correction ka pehla bottom. Bahut log yahan "support" maan ke kharidte hain.'},
+      {t:'Undercut shakeout',n:'Dusra low pehle ke thoda neeche — stops trigger, kamzor haath bahar. Lekin din ke end tak recover. Supply saaf ho gayi.'},
+      {t:'Pivot beech wale peak par',n:'W ke middle high ke upar volume ke saath breakout par entry. Tight handle bane to aur behtar.'}]})}
+function s7power(h){const D=gen({N:110,seed:71,kp:[[0,50],[20,54],[28,56],[60,118],[66,108],[74,113],[80,104],[88,110],[93,108],[95,113],[109,150]],vol:[[28,.018],[60,.03],[95,.014],[109,.025]],vm:[[28,.9],[60,2.4],[80,1],[94,.45],[96,2.6],[109,1.4]],
+    ov:{95:{o:109,h:113.6,l:108.8,c:113.2,vm:2.9}}});
+  const top=Math.max(...D.slice(55,66).map(d=>d.h)),flagLo=Math.min(...D.slice(62,94).map(d=>d.l));
+  candleChart(h,{D,label:'Power play high tight flag',intro:`Velocity pattern: tez thrust, phir chhota flag (${((1-flagLo/top)*100).toFixed(0)}% gehra).`,
+    ann:[{t:'z',a:28,b:60,col:COL.up,label:'+100% ~6 hafte',step:1},{t:'z',a:61,b:94,col:COL.blue,label:'flag',step:2},{t:'h',p:flagLo,a:61,b:94,col:COL.blue,label:`max pullback ${((1-flagLo/top)*100).toFixed(0)}%`,below:true,step:2},{t:'vz',a:86,b:94,col:COL.blue,label:'dry-up',step:2},{t:'m',i:95,label:'BUY',col:COL.amber,step:3}],
+    steps:[{t:'Thrust',n:'Lagbhag 8 hafte ke andar price double ya zyada — aksar kisi badi news (approval, naya product, results) se, kabhi bina news ke bhi.'},
+      {t:'Tight flag',n:'3–6 hafte sideways, 20–25% se zyada nahi gira, right side tight aur volume sookha. Strength itni hai ki pakad nahi chhoot rahi.'},
+      {t:'Flag breakout',n:'Flag ke high ke upar volume ke saath entry. Fundamentals abhi na dikhein to bhi chalta hai — price bol raha hai ki kuch badal gaya hai.'}]})}
+tabs($('s7tabs'),$('s7chart'),[{name:'3-C cheat',draw:s7cheat},{name:'Double bottom',draw:s7double},{name:'Power play',draw:s7power}]);
+
+/* ================= S8 ================= */
+(function(){const run=()=>{const C=+$('zc').value,r=+$('zr').value,e=+$('ze').value,s=+$('zs').value;const rs=e-s,sp=rs/e*100,risk=C*r/100,q=rs>0?Math.floor(risk/rs):0,pos=q*e,pp=pos/C*100;
+    stats($('zout'),[['Risk amount',fmt(risk)],['Stop distance',sp.toFixed(1)+'%',sp>10?'bad':sp>8?'warn':'good'],['Shares',q.toLocaleString('en-IN')],['Position size',fmt(pos)+' ('+pp.toFixed(0)+'%)',pp>50?'bad':pp>25?'warn':'good']]);
+    const w=[];if(rs<=0)w.push('Stop entry ke neeche hona chahiye.');if(sp>10)w.push('Stop 10% se door — setup mein risk "back" ho raha hai. Tighter entry dhoondo.');if(pp>50)w.push('Position 50% se badi — size cap karo, risk apne aap kam hoga.');else if(pp>25)w.push('20–25% se badi position sirf top conviction names mein.');if(r>2.5)w.push('Per trade risk 2.5% se zyada — book ki range 1.25–2.5% hai.');
+    $('zwarn').innerHTML=w.map(x=>`<div class="warn">⚠ ${x}</div>`).join('')||'<div class="good">✓ Guidelines ke andar.</div>'};
+  ['zc','zr','ze','zs'].forEach(i=>$(i).addEventListener('input',run));run();
+  const cols=['#7aa7ff','#4fd1c5','#5ee39b','#ff6b7d','#ff8fd1','#ffb547'];
+  const bar=(host,parts)=>$(host).innerHTML=parts.map(([n,w,c])=>`<span style="width:${w}%;background:${c}">${n} ${w}%</span>`).join('');
+  bar('al1',[['A',20,cols[0]],['B',20,cols[1]],['C',20,cols[2]],['D',20,cols[3]],['E',20,cols[4]]]);
+  bar('al2',[['A',20,cols[0]],['B',20,cols[1]],['C',20,cols[2]],['D',10,cols[3]],['E',10,cols[4]],['F',20,cols[5]]])})();
+
+/* ================= S9 ================= */
+function s9climax(h){const D=gen({N:130,seed:81,kp:[[0,100],[40,160],[55,150],[70,175],[80,168],[92,190],[100,215],[108,262],[113,300],[116,288],[129,240]],vol:[[92,.018],[113,.028],[129,.035]],vm:[[92,1.1],[108,1.6],[113,2.4],[129,1.8]],
+    ov:{109:{o:268,h:285,l:266,c:283,vm:3.4},111:{o:292,h:300,l:282,c:298,vm:3.8},112:{o:299,h:318,l:291,c:302,vm:4.2},113:{o:301,h:305,l:283,c:286,vm:3.5}}});
+  let up=0;for(let i=100;i<=112;i++)if(D[i].c>D[i-1].c)up++;const run=((D[112].h/D[99].l-1)*100).toFixed(0);
+  candleChart(h,{D,label:'Climax top selling into strength',intro:'Late stage stock ka blow-off. Jab sab achha lag raha ho, tab becho.',
+    ann:[{t:'t',i:20,p:D[20].h*1.08,s:'base 1',col:COL.mute,step:1},{t:'t',i:52,p:D[52].h*1.07,s:'base 2',col:COL.mute,step:1},{t:'t',i:78,p:D[78].h*1.07,s:'base 3',col:COL.mute,step:1},{t:'t',i:96,p:D[96].h*1.06,s:'base 4 (late)',col:COL.amber,step:1},
+      {t:'z',a:100,b:112,col:COL.dn,label:`+${run}% · ${up}/13 up`,bottom:true,step:2},
+      {t:'m',i:109,up:false,label:'gap',col:COL.pink,step:3},{t:'m',i:112,up:false,label:'widest range',col:COL.dn,step:3},{t:'vm',i:112,label:'record vol',col:COL.dn,step:3},
+      {t:'m',i:111,label:'SELL ½',col:COL.amber,step:4},{t:'m',i:121,label:'SELL rest',col:COL.amber,step:4}],
+    steps:[{t:'Base count',n:'Ye 4th base se breakout hai — late stage. Ab stock ko zyada "room" nahi dena; strength ke signals dhoondo.'},
+      {t:'Climax run',n:`Do hafte mein +${run}% aur 13 mein ${up} din up. 1–3 hafte mein 25–50%+ aur 70%+ up days — classic climax.`},
+      {t:'Exhaustion signs',n:'Gap-up, move ka sabse chauda daily range, aur record volume. Sab log ab kharid rahe hain — naya buyer kaun bachega?'},
+      {t:'Strength mein becho',n:'Jab buyers utavle hon tab becho. Poora top pakadna zaroori nahi; aadha climax mein, baaki pehli kamzori par.'}]})}
+function s9weak(h){const D=gen({N:120,seed:91,kp:[[0,100],[30,140],[45,132],[60,158],[70,152],[82,172],[88,170],[90,152],[100,146],[119,125]],vol:[[88,.017],[119,.025]],vm:[[88,1],[119,1.4]],
+    ov:{89:{o:170,h:171,l:156,c:157,vm:4}}});
+  candleChart(h,{D,label:'Selling into weakness',intro:'Stage 2 ka sabse bada down day, bhaari volume par — institutions nikal rahe hain.',
+    ann:[{t:'m',i:89,up:false,label:'largest down day',col:COL.dn,step:1},{t:'vm',i:89,label:'4× vol',col:COL.dn,step:1},{t:'m',i:90,label:'SELL',col:COL.amber,step:2}],
+    steps:[{t:'Sabse bada girna',n:'Stage 2 shuru hone ke baad ka sabse bada single-day girna, aur volume 4 guna. Ye "sasta mil raha hai" nahi — ye big boys ka exit hai, chahe news achhi dikhe.'},
+      {t:'Bina bahas exit',n:'Ego bolega "wapas aayega". Institutional selling ki lehar se ladna nahi. Becho, baad mein naya base bane to dobara dekho.'}]})}
+function s9be(h){const D=gen({N:140,seed:95,kp:[[0,90],[40,100],[52,95],[58,99],[60,104],[80,120],[90,116],[105,132],[112,126],[120,138],[128,131],[134,126],[139,122]],vol:[[58,.012],[139,.018]],vm:[[58,.7],[61,2.2],[139,1.1]],
+    ov:{60:{o:99.5,h:104.6,l:99.3,c:104.2,vm:2.6}}});
+  const m=ma(D,50);let k=61;while(k<139&&m[k]<104)k++;let ex=k;while(ex<139&&D[ex].c>=m[ex])ex++;
+  candleChart(h,{D,label:'Breakeven or better rule with 50-day',intro:'50-DMA jab tumhare entry tak chadh aaye, wahi naya stop ban jaata hai — "breakeven or better".',
+    ann:[{t:'m',i:60,label:'BUY ₹104',col:COL.amber,step:1},{t:'h',p:104*.92,a:60,b:k,col:COL.dn,label:'initial stop −8%',below:true,step:1},
+      {t:'c',i:k,p:m[k],col:COL.teal,step:2},{t:'t',i:k,p:m[k]*.955,s:'50-DMA = entry',col:COL.teal,step:2},{t:'m',i:ex,up:false,label:'close < 50-DMA',col:COL.dn,step:3}],
+    steps:[{t:'Normal stop',n:'Entry ₹104, stop 8% neeche. Stock chadhta raha, stop kabhi touch nahi hua.'},
+      {t:'50-DMA entry tak aaya',n:'Ab 50-DMA chadhte-chadhte tumhare entry price par aa gaya. Isi pal se stop = 50-DMA. Trade ab kabhi loss mein nahi jaa sakta.'},
+      {t:'Close below = exit',n:'50-DMA ke neeche close (kai traders hafte ka close dekhte hain) par exit. Naye bull market ke leaders ke liye ye rule khaas kaam ka hai — jaldi bechne se bachata hai.'}]})}
+tabs($('s9tabs'),$('s9chart'),[{name:'Climax top',draw:s9climax},{name:'Sell into weakness',draw:s9weak},{name:'Breakeven-or-better',draw:s9be}]);
+(function(){const run=()=>{const e=+$('fe').value,s=+$('fs').value,q=+$('fq').value,p=+$('fp').value;const R=e*s/100,mult=(p-e)/R,half=Math.floor(q/2),lock=half*(p-e);
+    stats($('fout'),[['Abhi kitne R',mult.toFixed(1)+'R',mult>=2?'good':'warn'],['Aadha becho',half+' @ '+fmt(p)],['Locked profit',fmt(lock),'good'],['Baaki par worst case',mult>=2?'Breakeven stop → '+fmt(lock)+' pakka':'Abhi free roll nahi (2R chahiye)',mult>=2?'good':'bad']])};
+  ['fe','fs','fq','fp'].forEach(i=>$(i).addEventListener('input',run));run()})();
+
+/* ================= S10 ================= */
+(function(){const a=bindRange('d1','d1O',v=>pct(v,0)),b=bindRange('d2','d2O',v=>pct(v,0)),c=bindRange('d3','d3O',v=>pct(v,0));
+  const draw=()=>{const r=[+a.value,+b.value,+c.value];let v=100;const vals=[100,...r.map(x=>v*=1+x/100)];const cagr=(Math.pow(vals[3]/100,1/3)-1)*100;
+    barChart($('s10bar'),{vals,cols:[COL.mute,...r.map(x=>x>=0?COL.up:COL.dn)],xl:['Start','Saal 1','Saal 2','Saal 3'],top:vals.map(v=>'₹'+v.toFixed(0)),h:240,label:'Three-year equity'});
+    stats($('s10stat'),[['3 saal baad',fmt(vals[3]*1000)+' (₹1L se)'],['Saalana (CAGR)',pct(cagr),cagr>15?'good':cagr>0?'warn':'bad']])};
+  [a,b,c].forEach(x=>x.addEventListener('input',draw));draw()})();
+
+/* ================= nav ================= */
+(function(){const secs=[...root.querySelectorAll('section.ch')],toc=$('toc');
+  secs.forEach(s=>{const a=document.createElement('a');a.href='#'+s.id;a.textContent=s.dataset.t;a.onclick=e=>{e.preventDefault();s.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'})};toc.appendChild(a)});
+  const links=[...toc.children];
+  const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){links.forEach(l=>l.classList.toggle('on',l.getAttribute('href')==='#'+e.target.id));const on=toc.querySelector('.on');on&&toc.scrollTo({left:on.offsetLeft-toc.clientWidth/2+on.offsetWidth/2,behavior:'smooth'})}}),{rootMargin:'-40% 0px -55% 0px'});
+  secs.forEach(s=>io.observe(s))})();
+
+}
+const pbView = document.getElementById('pbView'), notesWrap = document.querySelector('.wrap');
+let pbScroll = 0, notesScroll = 0;
+function showPB(on){
+  if(on === !pbView.hidden) return;
+  if(on){ notesScroll = window.scrollY; notesWrap.hidden = true; pbView.hidden = false;
+    if(!pbView.shadowRoot){ const r = pbView.attachShadow({mode:'open'}); r.innerHTML = PB_TEMPLATE; try{ pbBoot(r); }catch(e){ console.error('Playbook', e); } }
+    window.scrollTo({top:pbScroll});
+  } else { pbScroll = window.scrollY; pbView.hidden = true; notesWrap.hidden = false; window.scrollTo({top:notesScroll}); }
+}
+['tNotes','tCards','tStar'].forEach(id => document.getElementById(id).addEventListener('click', () => showPB(false), true));
+document.getElementById('tPlay').onclick = () => { fc.classList.remove('on'); tab('tPlay'); showPB(true); };
+
 
 /* PWA: offline + install */
 if('serviceWorker' in navigator && location.protocol.startsWith('http')){
